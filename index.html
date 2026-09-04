@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050508" />
+    <title>Audio Reactive Lab</title>
+  </head>
+  <body>
+    <main>
+      <canvas aria-hidden="true"></canvas>
+      <header>
+        <div class="mark"><span></span>AUDIO REACTIVE LAB</div>
+        <div class="status"><i></i><span>DEMO SIGNAL</span></div>
+      </header>
+      <section class="intro">
+        <p>REAL-TIME AUDIO STUDY / 001</p>
+        <h1>Make sound<br />visible.</h1>
+        <button class="listen">Enable microphone <span>↗</span></button>
+        <div class="error" hidden></div>
+      </section>
+      <aside class="meter" aria-label="Sensitivity control">
+        <label for="sensitivity">SENSITIVITY <b>1.4</b></label>
+        <input id="sensitivity" type="range" min="0.5" max="2.5" step="0.1" value="1.4" />
+      </aside>
+      <nav aria-label="Visual modes">
+        <button data-mode="orbit" class="active"><span>01</span>Orbit</button>
+        <button data-mode="terrain"><span>02</span>Terrain</button>
+        <button data-mode="prism"><span>03</span>Prism</button>
+      </nav>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
