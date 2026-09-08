@@ -930,14 +930,16 @@ function drawEqualizer(w, h, b) {
   ctx.globalCompositeOperation = 'lighter';
   for (let i = 0; i < barCount; i += 1) {
     const position = i / Math.max(1, barCount - 1);
+    const frequencyPosition = 1 - position;
     let raw;
     if (audio) {
-      const bin = Math.min(audio.frequency.length - 1, Math.floor(2 + Math.pow(position, 1.72) * 230));
-      const radius = 2 + Math.floor(position * 4);
+      // Bass lives at the outer edges; progressively higher bands move inward.
+      const bin = Math.min(audio.frequency.length - 1, Math.floor(2 + Math.pow(frequencyPosition, 1.72) * 230));
+      const radius = 2 + Math.floor(frequencyPosition * 4);
       raw = average(audio.frequency, Math.max(1, bin - radius), bin + radius + 1) * sensitivity;
     } else {
       const wave = Math.sin(frame * (.045 + position * .025) + i * .83) * .5 + .5;
-      const pulse = Math.max(0, Math.sin(frame * .052 - i * .19));
+      const pulse = Math.max(0, Math.sin(frame * .052 + position * 3.2));
       raw = (.07 + wave * .18 + pulse * .12) * (.78 + b.level);
     }
 
@@ -1008,11 +1010,11 @@ function drawEqualizer(w, h, b) {
   ctx.scale(titlePulse, titlePulse);
   ctx.font = `${fontSize}px 'Russo One', sans-serif`;
   ctx.fillStyle = '#fff';
-  ctx.strokeStyle = '#050507';
-  ctx.lineWidth = Math.max(3, fontSize * .06);
+  ctx.strokeStyle = 'rgba(3, 3, 5, .82)';
+  ctx.lineWidth = Math.max(2, fontSize * .038);
   ctx.lineJoin = 'round';
-  ctx.shadowColor = '#000';
-  ctx.shadowBlur = 22 + b.low * 18;
+  ctx.shadowColor = 'rgba(0, 0, 0, .78)';
+  ctx.shadowBlur = 12 + b.low * 10;
   ctx.strokeText(equalizerText, 0, 0);
   ctx.fillText(equalizerText, 0, 0);
   ctx.restore();
