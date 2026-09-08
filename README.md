@@ -12,6 +12,7 @@ Which visual direction feels worth developing into a customizable audiovisual in
 - **Overlap** — outlined figures drift and pulse with the music, their backgrounds independently fade between black and dark gray over 10–18 seconds, and their intersections reveal new color fields. Every randomized 2–3 minute interval, the figures slowly morph between squares and circles.
 - **Universe** — a deep-space flight through layered stars and a four-armed galaxy; bass bends the core and releases gravitational ripples, mids turn the galaxy, and treble accelerates the starfield.
 - **Tangle** — frequency-mapped dots bounce independently while remaining a single closed loop; self-crossing interior facets accumulate into colored regions, bass deepens the fill, and treble energizes the connections.
+- **Tunnel** — Terrain's spectrum history is wrapped into a cylindrical mesh that carries new rings through its length while smoothly tumbling around randomized X, Y, and Z axes.
 
 Once microphone input is active, the interface fades into an immersive visual-only state. Move the pointer to the right edge to reveal sensitivity and color controls, or to the bottom edge to reveal visualization types. Color presets include Original, Dark, Colorful, Random, and Vibrant, and affect only the visualization elements—not the neutral background.
 

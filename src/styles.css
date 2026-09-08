@@ -35,5 +35,15 @@ nav button { cursor: pointer; border: 0; border-radius: 9px; color: #777481; bac
 .immersive .meter { opacity: 0; transform: translate(22px, -50%); }
 .immersive .meter:hover, .immersive .meter:focus-within { opacity: 1; transform: translate(0, -50%); }
 @keyframes pulse { 50% { opacity: .35; } }
-@media (max-width: 700px) { header { padding: 20px; }.intro { left: 24px; top: 42%; }.meter { top: 50%; bottom: auto; right: 0; width: 190px; }.status { display: none; } nav { width: calc(100vw - 24px); } nav button { min-width: 0; flex: 1; padding: 10px 5px; } nav button span { display: none; } }
+@media (max-width: 700px) {
+  header { padding: 20px; }
+  .intro { left: 24px; top: 34%; }
+  .meter { top: auto; bottom: 138px; right: 24px; width: calc(100vw - 48px); padding: 16px 0; gap: 16px; transform: none; }
+  .status { display: none; }
+  nav { width: calc(100vw - 24px); }
+  nav button { min-width: 0; flex: 1; padding: 10px 2px; font-size: 10px; letter-spacing: -.025em; }
+  nav button span { display: none; }
+  .immersive .meter { transform: translateY(12px); }
+  .immersive .meter:hover, .immersive .meter:focus-within { transform: none; }
+}
 @media (prefers-reduced-motion: reduce) { .status.live i { animation: none; } }

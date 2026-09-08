@@ -13,7 +13,7 @@ const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel']);
 const validColorModes = new Set([...colorModeInput.options].map((option) => option.value));
 let savedSettings = {};
 try {
@@ -50,6 +50,12 @@ let universePreviousLow = 0;
 let universeLastRipple = -100;
 let universeRipples = [];
 let tangleDots = [];
+let tunnelHistory = [];
+let tunnelGrid = [];
+const tunnelRotation = { x: .48, y: -.32, z: .12 };
+const tunnelVelocity = { x: .0018, y: -.0013, z: .0011 };
+const tunnelTargetVelocity = { ...tunnelVelocity };
+let tunnelNextDirection = 0;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -266,6 +272,88 @@ function drawTerrain(w, h, b) {
     ctx.strokeStyle = color(225 + column * 2 + b.high * 70, 84, 60, .24);
     ctx.stroke();
   }
+}
+
+function drawTunnel(w, h, b) {
+  const sample = [];
+  for (let i = 0; i < TERRAIN_COLUMNS; i += 1) {
+    const position = i / (TERRAIN_COLUMNS - 1);
+    if (audio) {
+      const minFrequency = 45;
+      const maxFrequency = Math.min(14000, audio.context.sampleRate / 2);
+      const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, position);
+      const bin = Math.min(audio.frequency.length - 1, Math.round(frequency / (audio.context.sampleRate / audio.analyser.fftSize)));
+      sample.push(Math.pow(audio.frequency[bin] / 255, .82) * (.68 + position * .52));
+    } else {
+      sample.push((Math.max(0, Math.sin(i * .29 + frame * .03)) * .13 + Math.max(0, Math.sin(i * .11 - frame * .018)) * .06) * (.8 + position * .2));
+    }
+  }
+  tunnelHistory.unshift(sample);
+  tunnelHistory = tunnelHistory.slice(0, TERRAIN_ROWS);
+
+  if (frame >= tunnelNextDirection) {
+    const randomVelocity = () => (Math.random() * 2 - 1) * (.0022 + Math.random() * .0018);
+    tunnelTargetVelocity.x = randomVelocity();
+    tunnelTargetVelocity.y = randomVelocity();
+    tunnelTargetVelocity.z = randomVelocity();
+    tunnelNextDirection = frame + 300 + Math.random() * 540;
+  }
+  ['x', 'y', 'z'].forEach((axis) => {
+    tunnelVelocity[axis] += (tunnelTargetVelocity[axis] - tunnelVelocity[axis]) * .008;
+    tunnelRotation[axis] += tunnelVelocity[axis];
+  });
+
+  const cosX = Math.cos(tunnelRotation.x), sinX = Math.sin(tunnelRotation.x);
+  const cosY = Math.cos(tunnelRotation.y), sinY = Math.sin(tunnelRotation.y);
+  const cosZ = Math.cos(tunnelRotation.z), sinZ = Math.sin(tunnelRotation.z);
+  const focal = Math.max(w, h) * 1.4;
+  const project = (x, y, z, target) => {
+    const y1 = y * cosX - z * sinX;
+    const z1 = y * sinX + z * cosX;
+    const x2 = x * cosY + z1 * sinY;
+    const z2 = -x * sinY + z1 * cosY;
+    const x3 = x2 * cosZ - y1 * sinZ;
+    const y3 = x2 * sinZ + y1 * cosZ;
+    const scale = focal / (focal + z2);
+    target.x = w / 2 + x3 * scale;
+    target.y = h * .52 + y3 * scale;
+  };
+
+  const side = Math.min(w, h) * .68;
+  const baseRadius = side * .255;
+  while (tunnelGrid.length < tunnelHistory.length) {
+    tunnelGrid.push(Array.from({ length: TERRAIN_COLUMNS }, () => ({ x: 0, y: 0 })));
+  }
+  tunnelGrid.length = tunnelHistory.length;
+  tunnelHistory.forEach((row, rowIndex) => row.forEach((value, column) => {
+    const angle = column / (TERRAIN_COLUMNS - 1) * Math.PI * 2;
+    const radius = baseRadius + value * side * (.32 + b.low * .12);
+    project(
+      Math.cos(angle) * radius,
+      Math.sin(angle) * radius,
+      (rowIndex / (TERRAIN_ROWS - 1) - .5) * side,
+      tunnelGrid[rowIndex][column],
+    );
+  }));
+  const grid = tunnelGrid;
+
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 1;
+  grid.forEach((ring, rowIndex) => {
+    ctx.beginPath();
+    ring.forEach((point, column) => column === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+    ctx.closePath();
+    const depth = rowIndex / Math.max(1, TERRAIN_ROWS - 1);
+    ctx.strokeStyle = color(180 + rowIndex * 3 + b.high * 80, 90, 64, .16 + Math.sin(depth * Math.PI) * .58);
+    ctx.stroke();
+  });
+  for (let column = 0; column < TERRAIN_COLUMNS; column += 3) {
+    ctx.beginPath();
+    grid.forEach((ring, rowIndex) => rowIndex === 0 ? ctx.moveTo(ring[column].x, ring[column].y) : ctx.lineTo(ring[column].x, ring[column].y));
+    ctx.strokeStyle = color(220 + column * 2 + b.mid * 70, 86, 62, .22 + b.high * .18);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 function drawPrism(w, h, b) {
@@ -650,6 +738,7 @@ function draw() {
   if (mode === 'overlap') drawOverlap(innerWidth, innerHeight, b);
   if (mode === 'universe') drawUniverse(innerWidth, innerHeight, b);
   if (mode === 'tangle') drawTangle(innerWidth, innerHeight, b);
+  if (mode === 'tunnel') drawTunnel(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
 }
 
@@ -704,6 +793,8 @@ modeButtons.forEach((button) => button.addEventListener('click', () => {
   spectrumHistory = [];
   reverbWaves = [];
   universeRipples = [];
+  tunnelHistory = [];
+  tunnelGrid = [];
   modeButtons.forEach((item) => item.classList.toggle('active', item === button));
   const url = new URL(location.href);
   url.searchParams.set('mode', mode);
