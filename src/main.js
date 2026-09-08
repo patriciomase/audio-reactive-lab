@@ -246,7 +246,7 @@ function drawTerrain(w, h, b) {
   const side = Math.min(w, h) * .9;
   const grid = spectrumHistory.map((row, z) => row.map((value, i) => project(
     (i / (row.length - 1) - .5) * side,
-    -value * side * (.32 + b.low * .12),
+    -value * side * (.64 + b.low * .24),
     (z / (TERRAIN_ROWS - 1) - .5) * side,
   )));
 
