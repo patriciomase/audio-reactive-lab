@@ -89,6 +89,7 @@ let glyphCell = 12;
 let glyphPreviousLow = 0;
 let glyphLowAverage = .12;
 let glyphLastBeat = -100;
+let glyphColorWaves = [];
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -741,10 +742,10 @@ function drawUniverse(w, h, b) {
   ctx.globalCompositeOperation = 'lighter';
   const galaxyRotation = frame * .00052;
   const galaxyRadius = Math.max(shortEdge * .85, Math.max(w, h) * .68);
-  for (let index = 0; index < 1100; index += 1) {
+  for (let index = 0; index < 1800; index += 1) {
     const band = index % 3 === 0 ? b.low : index % 3 === 1 ? b.mid : b.high;
     const arm = index % 4;
-    const distance = Math.sqrt((index + .5) / 1100);
+    const distance = Math.sqrt((index + .5) / 1800);
     const noise = Math.sin(index * 91.733) * .5 + Math.sin(index * 17.17) * .5;
     const angle = arm * Math.PI / 2 + distance * 7.8 + galaxyRotation + noise * (.12 + distance * .18);
     const radius = distance * galaxyRadius;
@@ -752,10 +753,10 @@ function drawUniverse(w, h, b) {
     const y = cy + Math.sin(angle) * radius * (.27 + distance * .08);
     const dust = 1 - distance;
     const flicker = Math.pow(Math.max(0, Math.sin(frame * .035 + index * 2.417)), 14);
-    const highlight = Math.min(1, flicker * band * 2.8);
+    const highlight = Math.min(1, flicker * band * 1.7);
     ctx.beginPath();
-    ctx.fillStyle = color(25 + arm * 34 + distance * 110, 82, 58 + dust * 26 + highlight * 14, .07 + dust * .3 + highlight * .72);
-    ctx.arc(x, y, .3 + dust * 1.25 + highlight * 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = color(25 + arm * 34 + distance * 110, 82, 58 + dust * 26 + highlight * 8, .055 + dust * .25 + highlight * .32);
+    ctx.arc(x, y, .26 + dust * 1.08 + highlight * 1.45, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -1019,15 +1020,16 @@ function resetGlyphCanvas(w = innerWidth, h = innerHeight) {
   const scale = Math.min(1, 1920 / Math.max(1, w));
   glyphCanvas.width = Math.max(1, Math.round(w * scale));
   glyphCanvas.height = Math.max(1, Math.round(h * scale));
-  glyphColumns = Math.max(40, Math.min(160, Math.floor(glyphCanvas.width / 12)));
+  glyphColumns = Math.max(16, Math.min(80, Math.floor(glyphCanvas.width / 24)));
   glyphCell = glyphCanvas.width / glyphColumns;
   glyphRows = Math.ceil(glyphCanvas.height / glyphCell);
+  glyphColorWaves = [];
   glyphCtx.textAlign = 'center';
   glyphCtx.textBaseline = 'middle';
 }
 
 function writeGlyphs(count, b, replaceChance = .28) {
-  glyphCtx.font = `${Math.max(7, glyphCell * .82)}px DM Mono, monospace`;
+  glyphCtx.font = `${Math.max(14, glyphCell * .84)}px DM Mono, monospace`;
   for (let i = 0; i < count; i += 1) {
     const column = Math.floor(Math.random() * glyphColumns);
     const row = Math.floor(Math.random() * glyphRows);
@@ -1060,12 +1062,41 @@ function drawGlyph(w, h, b) {
     : frame % 52 === 0)
     && frame - glyphLastBeat > 14;
   if (beat) {
-    writeGlyphs(Math.floor(90 + Math.min(1, b.level) * 420), b, .38);
+    const screenScale = glyphColumns * glyphRows / (80 * 45);
+    writeGlyphs(Math.max(18, Math.floor((65 + Math.min(1, b.level) * 260) * screenScale)), b, .38);
+    glyphColorWaves.push({
+      x: Math.random() * glyphCanvas.width,
+      y: Math.random() * glyphCanvas.height,
+      radius: glyphCell,
+      alpha: .8,
+      hue: 170 + Math.random() * 190,
+      speed: glyphCell * (.34 + Math.min(1, b.level) * .55),
+    });
+    glyphColorWaves = glyphColorWaves.slice(-5);
     glyphLastBeat = frame;
   } else if (Math.random() < .12 + Math.min(.25, b.level * .2)) {
-    writeGlyphs(1 + Math.floor(b.high * 7), b, .72);
+    const screenScale = glyphColumns * glyphRows / (80 * 45);
+    writeGlyphs(Math.max(1, Math.floor((1 + b.high * 7) * screenScale)), b, .72);
   }
   glyphPreviousLow = b.low;
+
+  glyphCtx.save();
+  glyphCtx.globalCompositeOperation = 'source-atop';
+  glyphColorWaves = glyphColorWaves.filter((wave) => wave.alpha > .02);
+  glyphColorWaves.forEach((wave) => {
+    wave.radius += wave.speed;
+    wave.alpha *= .985;
+    const inner = Math.max(0, wave.radius - glyphCell * 3.2);
+    const outer = wave.radius + glyphCell * 3.2;
+    const gradient = glyphCtx.createRadialGradient(wave.x, wave.y, inner, wave.x, wave.y, outer);
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    gradient.addColorStop(.42, color(wave.hue + b.mid * 100, 100, 62, 0));
+    gradient.addColorStop(.58, color(wave.hue + b.high * 140, 100, 72, wave.alpha));
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    glyphCtx.fillStyle = gradient;
+    glyphCtx.fillRect(0, 0, glyphCanvas.width, glyphCanvas.height);
+  });
+  glyphCtx.restore();
 
   ctx.save();
   ctx.globalAlpha = .94;
