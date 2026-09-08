@@ -83,6 +83,8 @@ let equalizerLowAverage = .12;
 let equalizerLastBeat = -100;
 const glyphCanvas = document.createElement('canvas');
 const glyphCtx = glyphCanvas.getContext('2d');
+const glyphWaveCanvas = document.createElement('canvas');
+const glyphWaveCtx = glyphWaveCanvas.getContext('2d');
 let glyphColumns = 0;
 let glyphRows = 0;
 let glyphCell = 12;
@@ -90,6 +92,7 @@ let glyphPreviousLow = 0;
 let glyphLowAverage = .12;
 let glyphLastBeat = -100;
 let glyphColorWaves = [];
+let glyphNextWave = 0;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -1020,10 +1023,13 @@ function resetGlyphCanvas(w = innerWidth, h = innerHeight) {
   const scale = Math.min(1, 1920 / Math.max(1, w));
   glyphCanvas.width = Math.max(1, Math.round(w * scale));
   glyphCanvas.height = Math.max(1, Math.round(h * scale));
+  glyphWaveCanvas.width = glyphCanvas.width;
+  glyphWaveCanvas.height = glyphCanvas.height;
   glyphColumns = Math.max(16, Math.min(80, Math.floor(glyphCanvas.width / 24)));
   glyphCell = glyphCanvas.width / glyphColumns;
   glyphRows = Math.ceil(glyphCanvas.height / glyphCell);
   glyphColorWaves = [];
+  glyphNextWave = frame + 18;
   glyphCtx.textAlign = 'center';
   glyphCtx.textBaseline = 'middle';
 }
@@ -1045,6 +1051,18 @@ function writeGlyphs(count, b, replaceChance = .28) {
   }
 }
 
+function launchGlyphColorWave(b) {
+  glyphColorWaves.push({
+    x: Math.random() * glyphCanvas.width,
+    y: Math.random() * glyphCanvas.height,
+    radius: glyphCell,
+    alpha: .66 + Math.min(.24, b.level * .3),
+    hue: 170 + Math.random() * 190,
+    speed: glyphCell * (.38 + Math.min(1, b.level) * .62),
+  });
+  glyphColorWaves = glyphColorWaves.slice(-7);
+}
+
 function drawGlyph(w, h, b) {
   if (!glyphCanvas.width || Math.abs(glyphCanvas.width / glyphCanvas.height - w / h) > .01) {
     resetGlyphCanvas(w, h);
@@ -1064,15 +1082,7 @@ function drawGlyph(w, h, b) {
   if (beat) {
     const screenScale = glyphColumns * glyphRows / (80 * 45);
     writeGlyphs(Math.max(18, Math.floor((65 + Math.min(1, b.level) * 260) * screenScale)), b, .38);
-    glyphColorWaves.push({
-      x: Math.random() * glyphCanvas.width,
-      y: Math.random() * glyphCanvas.height,
-      radius: glyphCell,
-      alpha: .8,
-      hue: 170 + Math.random() * 190,
-      speed: glyphCell * (.34 + Math.min(1, b.level) * .55),
-    });
-    glyphColorWaves = glyphColorWaves.slice(-5);
+    launchGlyphColorWave(b);
     glyphLastBeat = frame;
   } else if (Math.random() < .12 + Math.min(.25, b.level * .2)) {
     const screenScale = glyphColumns * glyphRows / (80 * 45);
@@ -1080,22 +1090,32 @@ function drawGlyph(w, h, b) {
   }
   glyphPreviousLow = b.low;
 
-  glyphCtx.save();
-  glyphCtx.globalCompositeOperation = 'source-atop';
+  if (frame >= glyphNextWave && (!audio || b.level > .075)) {
+    launchGlyphColorWave(b);
+    glyphNextWave = frame + Math.max(18, 42 - Math.floor(Math.min(1, b.level) * 28));
+  }
+
+  glyphWaveCtx.clearRect(0, 0, glyphWaveCanvas.width, glyphWaveCanvas.height);
   glyphColorWaves = glyphColorWaves.filter((wave) => wave.alpha > .02);
   glyphColorWaves.forEach((wave) => {
     wave.radius += wave.speed;
     wave.alpha *= .985;
     const inner = Math.max(0, wave.radius - glyphCell * 3.2);
     const outer = wave.radius + glyphCell * 3.2;
-    const gradient = glyphCtx.createRadialGradient(wave.x, wave.y, inner, wave.x, wave.y, outer);
+    const gradient = glyphWaveCtx.createRadialGradient(wave.x, wave.y, inner, wave.x, wave.y, outer);
     gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
     gradient.addColorStop(.42, color(wave.hue + b.mid * 100, 100, 62, 0));
     gradient.addColorStop(.58, color(wave.hue + b.high * 140, 100, 72, wave.alpha));
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    glyphCtx.fillStyle = gradient;
-    glyphCtx.fillRect(0, 0, glyphCanvas.width, glyphCanvas.height);
+    glyphWaveCtx.fillStyle = gradient;
+    glyphWaveCtx.fillRect(0, 0, glyphWaveCanvas.width, glyphWaveCanvas.height);
   });
+  glyphWaveCtx.globalCompositeOperation = 'destination-in';
+  glyphWaveCtx.drawImage(glyphCanvas, 0, 0);
+  glyphWaveCtx.globalCompositeOperation = 'source-over';
+  glyphCtx.save();
+  glyphCtx.globalCompositeOperation = 'source-over';
+  glyphCtx.drawImage(glyphWaveCanvas, 0, 0);
   glyphCtx.restore();
 
   ctx.save();
