@@ -321,6 +321,7 @@ function createTangle(w, h) {
       energy: 0,
       frequencyPosition: (index + .5) / count,
       hue: 175 + index * 19,
+      wavePoints: Array.from({ length: 19 }, () => ({ x: 0, y: 0 })),
     };
   });
 }
@@ -351,7 +352,27 @@ function drawTangle(w, h, b) {
     dot.y = Math.max(margin, Math.min(h - margin, dot.y));
   });
 
-  const centre = tangleDots.reduce((sum, dot) => ({ x: sum.x + dot.x / tangleDots.length, y: sum.y + dot.y / tangleDots.length }), { x: 0, y: 0 });
+  const centre = { x: 0, y: 0 };
+  tangleDots.forEach((dot) => { centre.x += dot.x / tangleDots.length; centre.y += dot.y / tangleDots.length; });
+  const edgeWaves = tangleDots.map((dot, index) => {
+    const next = tangleDots[(index + 1) % tangleDots.length];
+    const dx = next.x - dot.x;
+    const dy = next.y - dot.y;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const normalX = -dy / length;
+    const normalY = dx / length;
+    const sharedEnergy = (dot.energy + next.energy) / 2;
+    const amplitude = 3 + sharedEnergy * 26;
+    const cycles = 1.5 + index % 4;
+    dot.wavePoints.forEach((point, pointIndex) => {
+      const t = pointIndex / 18;
+      const envelope = Math.sin(t * Math.PI);
+      const wave = Math.sin(t * Math.PI * 2 * cycles - frame * (.035 + dot.frequencyPosition * .055) + index * .83);
+      point.x = dot.x + dx * t + normalX * wave * amplitude * envelope;
+      point.y = dot.y + dy * t + normalY * wave * amplitude * envelope;
+    });
+    return dot.wavePoints;
+  });
   ctx.globalCompositeOperation = 'lighter';
   tangleDots.forEach((dot, index) => {
     const next = tangleDots[(index + 1) % tangleDots.length];
@@ -360,15 +381,16 @@ function drawTangle(w, h, b) {
     // crosses itself these facets stack, revealing the overlap as colored fill.
     ctx.beginPath();
     ctx.moveTo(centre.x, centre.y);
-    ctx.lineTo(dot.x, dot.y);
-    ctx.lineTo(next.x, next.y);
+    edgeWaves[index].forEach((point) => ctx.lineTo(point.x, point.y));
     ctx.closePath();
     ctx.fillStyle = color((dot.hue + next.hue) / 2 + frame * .025, 90, 56 + sharedEnergy * 16, .018 + b.low * .035 + sharedEnergy * .04);
     ctx.fill();
   });
 
   ctx.beginPath();
-  tangleDots.forEach((dot, index) => index === 0 ? ctx.moveTo(dot.x, dot.y) : ctx.lineTo(dot.x, dot.y));
+  edgeWaves.forEach((wave, edgeIndex) => wave.forEach((point, pointIndex) => {
+    if (edgeIndex === 0 && pointIndex === 0) ctx.moveTo(point.x, point.y); else ctx.lineTo(point.x, point.y);
+  }));
   ctx.closePath();
   ctx.fillStyle = color(245 + frame * .02, 88, 55, .018 + b.low * .035);
   ctx.fill('evenodd');
@@ -376,8 +398,7 @@ function drawTangle(w, h, b) {
     const next = tangleDots[(index + 1) % tangleDots.length];
     const sharedEnergy = (dot.energy + next.energy) / 2;
     ctx.beginPath();
-    ctx.moveTo(dot.x, dot.y);
-    ctx.lineTo(next.x, next.y);
+    edgeWaves[index].forEach((point, pointIndex) => pointIndex === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
     ctx.strokeStyle = color(dot.hue + sharedEnergy * 70, 86, 68, .25 + sharedEnergy * .52 + b.high * .12);
     ctx.lineWidth = .7 + sharedEnergy * 1.8 + b.high * .6;
     ctx.stroke();
