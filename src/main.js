@@ -28,6 +28,14 @@ let orbitDirection = 1;
 let reverseUntil = 0;
 let lastWaveFrame = -100;
 let squares = [];
+let terrainAngle = 0;
+let terrainDirection = 1;
+let terrainVelocity = .0045;
+let terrainTargetVelocity = .0045;
+let terrainNextTurnFrame = null;
+
+const TERRAIN_COLUMNS = 72;
+const TERRAIN_ROWS = 44;
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
 
@@ -147,12 +155,36 @@ function drawOrbit(w, h, b) {
 
 function drawTerrain(w, h, b) {
   const sample = [];
-  for (let i = 0; i < 48; i += 1) {
-    sample.push(audio ? audio.frequency[i * 3] / 255 : Math.max(0, Math.sin(i * .4 + frame * .03)) * .18);
+  for (let i = 0; i < TERRAIN_COLUMNS; i += 1) {
+    const position = i / (TERRAIN_COLUMNS - 1);
+    if (audio) {
+      const minFrequency = 45;
+      const maxFrequency = Math.min(14000, audio.context.sampleRate / 2);
+      const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, position);
+      const bin = Math.min(audio.frequency.length - 1, Math.round(frequency / (audio.context.sampleRate / audio.analyser.fftSize)));
+      const balanced = Math.pow(audio.frequency[bin] / 255, .82) * (.68 + position * .52);
+      sample.push(balanced);
+    } else {
+      sample.push((Math.max(0, Math.sin(i * .29 + frame * .03)) * .13 + Math.max(0, Math.sin(i * .11 - frame * .018)) * .06) * (.8 + position * .2));
+    }
   }
   spectrumHistory.unshift(sample);
-  spectrumHistory = spectrumHistory.slice(0, 30);
-  const yaw = frame * .009;
+  spectrumHistory = spectrumHistory.slice(0, TERRAIN_ROWS);
+
+  if (terrainNextTurnFrame === null) terrainNextTurnFrame = frame + 420 + Math.random() * 540;
+  if (frame >= terrainNextTurnFrame && terrainTargetVelocity !== 0) {
+    terrainTargetVelocity = 0;
+    terrainNextTurnFrame = Infinity;
+  }
+  terrainVelocity += (terrainTargetVelocity - terrainVelocity) * .025;
+  if (terrainTargetVelocity === 0 && Math.abs(terrainVelocity) < .00006) {
+    terrainDirection *= -1;
+    terrainTargetVelocity = .0045 * terrainDirection;
+    terrainNextTurnFrame = frame + 420 + Math.random() * 720;
+  }
+  terrainAngle += terrainVelocity;
+
+  const yaw = terrainAngle;
   const pitch = .82 + b.low * .08;
   const roll = b.high * .025;
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
@@ -174,7 +206,7 @@ function drawTerrain(w, h, b) {
   const grid = spectrumHistory.map((row, z) => row.map((value, i) => project(
     (i / (row.length - 1) - .5) * side,
     -value * side * (.32 + b.low * .12),
-    (z / 29 - .5) * side,
+    (z / (TERRAIN_ROWS - 1) - .5) * side,
   )));
 
   ctx.lineWidth = 1.05;
@@ -184,7 +216,7 @@ function drawTerrain(w, h, b) {
     ctx.strokeStyle = color(190 + z * 4 + b.high * 80, 90, 64, .82 - z / 45);
     ctx.stroke();
   });
-  for (let column = 0; column < 48; column += 3) {
+  for (let column = 0; column < TERRAIN_COLUMNS; column += 2) {
     ctx.beginPath();
     grid.forEach((row, z) => {
       const point = row[column];

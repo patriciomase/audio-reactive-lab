@@ -7,7 +7,7 @@ An experimental, microphone-driven visual playground inspired by classic Winamp 
 Which visual direction feels worth developing into a customizable audiovisual instrument? This throwaway first pass provides three modes on one route:
 
 - **Orbit** — low/mid/high frequency bands drive layered particle rings with subtly varied electron sizes; long-lived echoes capture the current formation, expand beyond the screen edges, and only then fade while transients briefly reverse orbital direction.
-- **Terrain** — FFT history becomes a square 3D spectrum mesh sized to 90% of the viewport's shorter edge and rotating continuously through 360°.
+- **Terrain** — a dense, logarithmically balanced FFT history becomes a square 3D spectrum mesh sized to 90% of the viewport's shorter edge. It rotates at half speed, periodically decelerates to a full stop, and reverses direction at randomized intervals.
 - **Prism** — the time-domain waveform becomes a layered chromatic field.
 - **Overlap** — light-gray squares drift and pulse with the music while their intersections reveal new color fields.
 
