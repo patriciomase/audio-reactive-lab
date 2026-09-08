@@ -339,6 +339,7 @@ function tangleEnergy(dot) {
 
 function drawTangle(w, h, b) {
   if (!tangleDots.length) createTangle(w, h);
+  drawStarfield(w, h, b, .48);
   const margin = 22;
   tangleDots.forEach((dot) => {
     const live = Math.min(1.25, tangleEnergy(dot));
@@ -636,7 +637,7 @@ function drawDancers(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawUniverse(w, h, b) {
+function drawStarfield(w, h, b, intensity = 1) {
   const cx = w * .5;
   const cy = h * .48;
   const shortEdge = Math.min(w, h);
@@ -665,11 +666,20 @@ function drawUniverse(w, h, b) {
     ctx.beginPath();
     ctx.moveTo(oldX, oldY);
     ctx.lineTo(x, y);
-    ctx.strokeStyle = color(star.hue, 72, 78, .12 + (1 - star.z) * .58 + b.high * .2);
-    ctx.lineWidth = star.size * (1.15 - star.z) + b.high * 1.2;
+    ctx.strokeStyle = color(star.hue, 72, 78, (.12 + (1 - star.z) * .58 + b.high * .2) * intensity);
+    ctx.lineWidth = (star.size * (1.15 - star.z) + b.high * 1.2) * (.75 + intensity * .25);
     ctx.stroke();
   });
+  ctx.globalCompositeOperation = 'source-over';
+}
 
+function drawUniverse(w, h, b) {
+  const cx = w * .5;
+  const cy = h * .48;
+  const shortEdge = Math.min(w, h);
+  drawStarfield(w, h, b);
+
+  ctx.globalCompositeOperation = 'lighter';
   const transient = b.low > .34 && b.low - universePreviousLow > .035;
   if (transient && frame - universeLastRipple > 30) {
     universeRipples.push({ radius: shortEdge * .06, alpha: .72, tilt: .26 + Math.random() * .12 });
