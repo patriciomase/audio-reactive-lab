@@ -12,7 +12,7 @@ const sensitivityValue = document.querySelector('.meter b');
 const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'dancers']);
 const requestedMode = new URLSearchParams(location.search).get('mode');
 let mode = validModes.has(requestedMode) ? requestedMode : 'orbit';
 let sensitivity = Number(sensitivityInput.value);
@@ -44,6 +44,19 @@ let overlapShape = {
 
 const TERRAIN_COLUMNS = 72;
 const TERRAIN_ROWS = 44;
+const dancerMask = document.createElement('canvas');
+const dancerOutline = document.createElement('canvas');
+const dancerMaskCtx = dancerMask.getContext('2d');
+const dancerOutlineCtx = dancerOutline.getContext('2d');
+dancerMask.width = dancerOutline.width = 220;
+dancerMask.height = dancerOutline.height = 340;
+
+const dancers = Array.from({ length: 7 }, (_, index) => ({
+  x: .1 + index * .135,
+  depth: .58 + ((index * 37) % 42) / 100,
+  phase: index * .91,
+  hue: 180 + index * 31,
+}));
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
 
@@ -353,6 +366,90 @@ function drawOverlap(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+function endpoint(origin, length, angle) {
+  return { x: origin.x + Math.cos(angle) * length, y: origin.y + Math.sin(angle) * length };
+}
+
+function drawLimb(context, points, width) {
+  context.beginPath();
+  context.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i += 1) context.lineTo(points[i].x, points[i].y);
+  context.lineWidth = width;
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.stroke();
+}
+
+function renderDancer(phase, b, strokeColor) {
+  dancerMaskCtx.clearRect(0, 0, dancerMask.width, dancerMask.height);
+  dancerMaskCtx.fillStyle = '#fff';
+  dancerMaskCtx.strokeStyle = '#fff';
+
+  const beat = Math.max(0, Math.sin(phase * 2)) * b.low;
+  const bounce = Math.sin(phase * 2) * (5 + b.low * 14) - beat * 10;
+  const lean = Math.sin(phase * .73) * (8 + b.mid * 12);
+  const pelvis = { x: 110, y: 205 + bounce };
+  const chest = { x: 110 + lean, y: 128 + bounce * .55 };
+  const neck = { x: chest.x + lean * .18, y: chest.y - 27 };
+  const shoulderL = { x: chest.x - 27, y: chest.y + 2 };
+  const shoulderR = { x: chest.x + 27, y: chest.y - 2 };
+  const hipL = { x: pelvis.x - 18, y: pelvis.y };
+  const hipR = { x: pelvis.x + 18, y: pelvis.y };
+
+  drawLimb(dancerMaskCtx, [neck, chest, pelvis], 43);
+  const armSwing = Math.sin(phase) * (1 + b.mid * .5);
+  const elbowL = endpoint(shoulderL, 48, 2.35 + armSwing * .72);
+  const handL = endpoint(elbowL, 50, 1.9 + Math.sin(phase * 1.31 + 1) * 1.05);
+  const elbowR = endpoint(shoulderR, 48, .8 + armSwing * .72);
+  const handR = endpoint(elbowR, 50, 1.15 + Math.sin(phase * 1.17 + 2) * 1.05);
+  drawLimb(dancerMaskCtx, [shoulderL, elbowL, handL], 17);
+  drawLimb(dancerMaskCtx, [shoulderR, elbowR, handR], 17);
+
+  const stride = Math.sin(phase) * (.48 + b.low * .28);
+  const kneeL = endpoint(hipL, 61, 1.62 + stride);
+  const footL = endpoint(kneeL, 62, 1.47 - stride * .52);
+  const kneeR = endpoint(hipR, 61, 1.52 - stride);
+  const footR = endpoint(kneeR, 62, 1.67 + stride * .52);
+  drawLimb(dancerMaskCtx, [hipL, kneeL, footL], 22);
+  drawLimb(dancerMaskCtx, [hipR, kneeR, footR], 22);
+
+  dancerMaskCtx.beginPath();
+  dancerMaskCtx.arc(neck.x, neck.y - 24, 20, 0, Math.PI * 2);
+  dancerMaskCtx.fill();
+
+  dancerOutlineCtx.clearRect(0, 0, dancerOutline.width, dancerOutline.height);
+  const outlineWidth = 3.5 + b.high * 4;
+  for (let direction = 0; direction < 12; direction += 1) {
+    const angle = direction / 12 * Math.PI * 2;
+    dancerOutlineCtx.drawImage(dancerMask, Math.cos(angle) * outlineWidth, Math.sin(angle) * outlineWidth);
+  }
+  dancerOutlineCtx.globalCompositeOperation = 'destination-out';
+  dancerOutlineCtx.drawImage(dancerMask, 0, 0);
+  dancerOutlineCtx.globalCompositeOperation = 'source-in';
+  dancerOutlineCtx.fillStyle = strokeColor;
+  dancerOutlineCtx.fillRect(0, 0, dancerOutline.width, dancerOutline.height);
+  dancerOutlineCtx.globalCompositeOperation = 'source-over';
+}
+
+function drawDancers(w, h, b) {
+  const tempo = frame * (.018 + b.mid * .018);
+  const floor = h * .92;
+  const activeDancers = dancers.slice(0, w < 600 ? 4 : dancers.length);
+  ctx.globalCompositeOperation = 'lighter';
+  activeDancers.forEach((dancer, index) => {
+    const scale = dancer.depth * Math.min(1, h / 690, w / 1050);
+    const phase = tempo + dancer.phase + Math.sin(frame * .003 + index) * .24;
+    const x = w * ((index + .5) / activeDancers.length) + Math.sin(phase * .37 + index) * (12 + b.mid * 18);
+    for (let trail = 2; trail >= 0; trail -= 1) {
+      const alpha = trail === 0 ? .62 + b.level * .35 : .055 + b.high * .06;
+      renderDancer(phase - trail * (.14 + b.high * .12), b, color(dancer.hue + trail * 24 + frame * .04, 88, 68, alpha));
+      const drift = trail * (5 + b.high * 8);
+      ctx.drawImage(dancerOutline, x - dancerOutline.width * scale / 2 - drift, floor - dancerOutline.height * scale, dancerOutline.width * scale, dancerOutline.height * scale);
+    }
+  });
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 function draw() {
   frame += 1;
   const b = bands();
@@ -361,6 +458,7 @@ function draw() {
   if (mode === 'terrain') drawTerrain(innerWidth, innerHeight, b);
   if (mode === 'prism') drawPrism(innerWidth, innerHeight, b);
   if (mode === 'overlap') drawOverlap(innerWidth, innerHeight, b);
+  if (mode === 'dancers') drawDancers(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
 }
 
