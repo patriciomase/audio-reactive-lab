@@ -61,7 +61,7 @@ let overlapShape = {
 };
 
 const TERRAIN_COLUMNS = 72;
-const TERRAIN_ROWS = 44;
+const TERRAIN_ROWS = 88;
 const universeStars = Array.from({ length: 340 }, () => ({
   x: Math.random() * 2 - 1,
   y: Math.random() * 2 - 1,
