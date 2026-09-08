@@ -12,7 +12,7 @@ const sensitivityValue = document.querySelector('.meter b');
 const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'dancers', 'universe']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'dancers', 'universe', 'tangle']);
 const requestedMode = new URLSearchParams(location.search).get('mode');
 let mode = validModes.has(requestedMode) ? requestedMode : 'orbit';
 let sensitivity = Number(sensitivityInput.value);
@@ -36,6 +36,7 @@ let terrainNextTurnFrame = null;
 let universePreviousLow = 0;
 let universeLastRipple = -100;
 let universeRipples = [];
+let tangleDots = [];
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -306,6 +307,88 @@ function createSquares(w, h) {
   });
 }
 
+function createTangle(w, h) {
+  const count = w < 700 ? 11 : 17;
+  const radius = Math.min(w, h) * .3;
+  tangleDots = Array.from({ length: count }, (_, index) => {
+    const angle = index / count * Math.PI * 2;
+    const speed = .22 + ((index * 31) % 28) / 100;
+    return {
+      x: w / 2 + Math.cos(angle) * radius * (.7 + (index % 3) * .12),
+      y: h / 2 + Math.sin(angle) * radius * (.7 + ((index + 1) % 4) * .08),
+      vx: Math.cos(index * 2.17 + .4) * speed,
+      vy: Math.sin(index * 1.83 + .7) * speed,
+      energy: 0,
+      frequencyPosition: (index + .5) / count,
+      hue: 175 + index * 19,
+    };
+  });
+}
+
+function tangleEnergy(dot) {
+  if (!audio) return .08 + Math.max(0, Math.sin(frame * (.012 + dot.frequencyPosition * .035) + dot.hue)) * .3;
+  const minFrequency = 45;
+  const maxFrequency = Math.min(15000, audio.context.sampleRate / 2);
+  const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, dot.frequencyPosition);
+  const bin = frequency / (audio.context.sampleRate / audio.analyser.fftSize);
+  const radius = 2 + Math.round(dot.frequencyPosition * 5);
+  return average(audio.frequency, Math.max(1, Math.round(bin) - radius), Math.round(bin) + radius + 1)
+    * sensitivity * (.8 + dot.frequencyPosition * .65);
+}
+
+function drawTangle(w, h, b) {
+  if (!tangleDots.length) createTangle(w, h);
+  const margin = 22;
+  tangleDots.forEach((dot) => {
+    const live = Math.min(1.25, tangleEnergy(dot));
+    dot.energy += (live - dot.energy) * (live > dot.energy ? .18 : .055);
+    const acceleration = 1 + dot.energy * (1.4 + dot.frequencyPosition);
+    dot.x += dot.vx * acceleration;
+    dot.y += dot.vy * acceleration;
+    if (dot.x < margin && dot.vx < 0 || dot.x > w - margin && dot.vx > 0) dot.vx *= -1;
+    if (dot.y < margin && dot.vy < 0 || dot.y > h - margin && dot.vy > 0) dot.vy *= -1;
+    dot.x = Math.max(margin, Math.min(w - margin, dot.x));
+    dot.y = Math.max(margin, Math.min(h - margin, dot.y));
+  });
+
+  const centre = tangleDots.reduce((sum, dot) => ({ x: sum.x + dot.x / tangleDots.length, y: sum.y + dot.y / tangleDots.length }), { x: 0, y: 0 });
+  ctx.globalCompositeOperation = 'lighter';
+  tangleDots.forEach((dot, index) => {
+    const next = tangleDots[(index + 1) % tangleDots.length];
+    const sharedEnergy = (dot.energy + next.energy) / 2;
+    // Every edge forms one translucent interior facet. Where the moving loop
+    // crosses itself these facets stack, revealing the overlap as colored fill.
+    ctx.beginPath();
+    ctx.moveTo(centre.x, centre.y);
+    ctx.lineTo(dot.x, dot.y);
+    ctx.lineTo(next.x, next.y);
+    ctx.closePath();
+    ctx.fillStyle = color((dot.hue + next.hue) / 2 + frame * .025, 90, 56 + sharedEnergy * 16, .018 + b.low * .035 + sharedEnergy * .04);
+    ctx.fill();
+  });
+
+  ctx.beginPath();
+  tangleDots.forEach((dot, index) => index === 0 ? ctx.moveTo(dot.x, dot.y) : ctx.lineTo(dot.x, dot.y));
+  ctx.closePath();
+  ctx.fillStyle = color(245 + frame * .02, 88, 55, .018 + b.low * .035);
+  ctx.fill('evenodd');
+  tangleDots.forEach((dot, index) => {
+    const next = tangleDots[(index + 1) % tangleDots.length];
+    const sharedEnergy = (dot.energy + next.energy) / 2;
+    ctx.beginPath();
+    ctx.moveTo(dot.x, dot.y);
+    ctx.lineTo(next.x, next.y);
+    ctx.strokeStyle = color(dot.hue + sharedEnergy * 70, 86, 68, .25 + sharedEnergy * .52 + b.high * .12);
+    ctx.lineWidth = .7 + sharedEnergy * 1.8 + b.high * .6;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = color(dot.hue, 92, 72, .5 + dot.energy * .45);
+    ctx.arc(dot.x, dot.y, 1.8 + dot.energy * 5.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 function drawOverlap(w, h, b) {
   if (!squares.length) createSquares(w, h);
   const speed = 1 + b.mid * 1.8;
@@ -467,7 +550,16 @@ function renderDancer(phase, b, strokeColor, style) {
   const hipL = { x: pelvis.x - 18, y: pelvis.y };
   const hipR = { x: pelvis.x + 18, y: pelvis.y };
 
-  drawLimb(dancerMaskCtx, [neck, chest, pelvis], 43);
+  dancerMaskCtx.beginPath();
+  dancerMaskCtx.moveTo(chest.x - 31, chest.y - 4);
+  dancerMaskCtx.bezierCurveTo(chest.x - 27, chest.y + 22, pelvis.x - 16, pelvis.y - 40, pelvis.x - 22, pelvis.y - 5);
+  dancerMaskCtx.quadraticCurveTo(pelvis.x, pelvis.y + 12, pelvis.x + 22, pelvis.y - 5);
+  dancerMaskCtx.bezierCurveTo(pelvis.x + 16, pelvis.y - 40, chest.x + 27, chest.y + 22, chest.x + 31, chest.y - 4);
+  dancerMaskCtx.quadraticCurveTo(chest.x, chest.y - 17, chest.x - 31, chest.y - 4);
+  dancerMaskCtx.fill();
+  dancerMaskCtx.beginPath();
+  dancerMaskCtx.roundRect(neck.x - 7, neck.y - 5, 14, 31, 6);
+  dancerMaskCtx.fill();
   const gestures = [
     [{ x: 54 + groove * 8, y: 54 - b.high * 12 }, { x: 177, y: 142 + counterGroove * 20 }],
     [{ x: 48, y: 125 + groove * 24 }, { x: 172, y: 76 - counterGroove * 18 }],
@@ -491,7 +583,7 @@ function renderDancer(phase, b, strokeColor, style) {
   drawLimb(dancerMaskCtx, [hipR, kneeR, footR], 22);
 
   dancerMaskCtx.beginPath();
-  dancerMaskCtx.arc(neck.x, neck.y - 24, 20, 0, Math.PI * 2);
+  dancerMaskCtx.ellipse(neck.x, neck.y - 25, 17, 21, sway * .004, 0, Math.PI * 2);
   dancerMaskCtx.fill();
 
   dancerOutlineCtx.clearRect(0, 0, dancerOutline.width, dancerOutline.height);
@@ -612,6 +704,7 @@ function draw() {
   if (mode === 'overlap') drawOverlap(innerWidth, innerHeight, b);
   if (mode === 'dancers') drawDancers(innerWidth, innerHeight, b);
   if (mode === 'universe') drawUniverse(innerWidth, innerHeight, b);
+  if (mode === 'tangle') drawTangle(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
 }
 
@@ -671,7 +764,7 @@ modeButtons.forEach((button) => button.addEventListener('click', () => {
   window.umami?.track('visualization-changed', { visualization: mode });
 }));
 window.addEventListener('resize', resize);
-window.addEventListener('resize', () => { squares = []; });
+window.addEventListener('resize', () => { squares = []; tangleDots = []; });
 window.addEventListener('pointermove', (event) => {
   app.classList.toggle('show-modes', Boolean(audio) && event.clientY > innerHeight - 96);
 });
