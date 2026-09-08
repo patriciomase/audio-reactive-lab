@@ -6,7 +6,7 @@ An experimental, microphone-driven visual playground inspired by classic Winamp 
 
 Which visual direction feels worth developing into a customizable audiovisual instrument? This throwaway first pass provides three modes on one route:
 
-- **Orbit** — low/mid/high frequency bands drive layered particle rings; transients emit expanding reverb waves and briefly reverse orbital direction.
+- **Orbit** — low/mid/high frequency bands drive layered particle rings; echoes capture and expand the current particle formation while transients briefly reverse orbital direction.
 - **Terrain** — FFT history becomes a rotating 3D spectrum landscape spanning roughly 90% of the viewport.
 - **Prism** — the time-domain waveform becomes a layered chromatic field.
 

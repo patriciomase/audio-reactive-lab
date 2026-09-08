@@ -84,28 +84,13 @@ function drawBackground(w, h, b) {
 function drawOrbit(w, h, b) {
   const cx = w / 2, cy = h / 2;
   const transient = b.low > .38 && b.low - previousLow > .045;
-  const waveInterval = Math.max(52, 125 - b.level * 90);
-  if ((transient || frame - lastWaveFrame > waveInterval) && frame - lastWaveFrame > 28) {
-    reverbWaves.push({ radius: 55, alpha: Math.min(.75, .28 + b.low * .55), hue: 245 + b.high * 100, speed: 2.6 + b.low * 4.2 });
-    if (transient) reverseUntil = frame + 34;
-    lastWaveFrame = frame;
-  }
+  if (transient) reverseUntil = frame + 34;
   const targetDirection = frame < reverseUntil ? -1 : 1;
   orbitDirection += (targetDirection - orbitDirection) * (targetDirection < 0 ? .24 : .1);
   orbitAngle += .008 * orbitDirection;
   previousLow = b.low;
 
-  ctx.globalCompositeOperation = 'lighter';
-  reverbWaves = reverbWaves.filter((wave) => wave.radius < Math.hypot(w, h) * .62 && wave.alpha > .008);
-  reverbWaves.forEach((wave) => {
-    wave.radius += wave.speed;
-    wave.alpha *= .986;
-    ctx.beginPath();
-    ctx.strokeStyle = color(wave.hue, 88, 68, wave.alpha);
-    ctx.lineWidth = 1.2 + wave.alpha * 2;
-    ctx.ellipse(cx, cy, wave.radius, wave.radius * .72, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  });
+  const points = [];
   for (let ring = 0; ring < 5; ring += 1) {
     const energy = ring < 2 ? b.low : ring < 4 ? b.mid : b.high;
     const count = 28 + ring * 12;
@@ -115,12 +100,49 @@ function drawOrbit(w, h, b) {
       const wobble = Math.sin(a * (3 + ring) + frame * .018) * (8 + energy * 24);
       const x = cx + Math.cos(a) * (radius + wobble);
       const y = cy + Math.sin(a) * (radius + wobble) * .72;
-      ctx.beginPath();
-      ctx.fillStyle = color(255 + ring * 24 + b.high * 80, 90, 65 + energy * 20, .24 + energy * .62);
-      ctx.arc(x, y, 1.2 + energy * 4.5, 0, Math.PI * 2);
-      ctx.fill();
+      points.push({
+        x: x - cx,
+        y: y - cy,
+        size: 1.2 + energy * 4.5,
+        hue: 255 + ring * 24 + b.high * 80,
+        lightness: 65 + energy * 20,
+        alpha: .24 + energy * .62,
+      });
     }
   }
+
+  const waveInterval = Math.max(54, 128 - b.level * 90);
+  if ((transient || frame - lastWaveFrame > waveInterval) && frame - lastWaveFrame > 28) {
+    reverbWaves.push({
+      points: points.map((point) => ({ ...point })),
+      scale: 1.02,
+      speed: .011 + b.low * .009,
+      alpha: Math.min(.78, .52 + b.level * .5),
+      maxRadius: 310 + b.low * 65,
+    });
+    lastWaveFrame = frame;
+  }
+
+  ctx.globalCompositeOperation = 'lighter';
+  const viewportRadius = Math.hypot(w, h) * .62;
+  reverbWaves = reverbWaves.filter((wave) => wave.maxRadius * wave.scale < viewportRadius && wave.alpha > .006);
+  reverbWaves.forEach((wave) => {
+    wave.scale += wave.speed;
+    wave.speed *= 1.003;
+    wave.alpha *= .994;
+    wave.points.forEach((point) => {
+      ctx.beginPath();
+      ctx.fillStyle = color(point.hue, 90, point.lightness, point.alpha * wave.alpha);
+      ctx.arc(cx + point.x * wave.scale, cy + point.y * wave.scale, Math.max(.6, point.size * (.55 + wave.alpha * .35)), 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
+  points.forEach((point) => {
+    ctx.beginPath();
+    ctx.fillStyle = color(point.hue, 90, point.lightness, point.alpha);
+    ctx.arc(cx + point.x, cy + point.y, point.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
   ctx.globalCompositeOperation = 'source-over';
 }
 
