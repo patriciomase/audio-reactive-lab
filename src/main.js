@@ -295,6 +295,7 @@ async function startAudio() {
     listenButton.classList.add('secondary');
     listenButton.textContent = 'Stop listening';
     app.classList.add('immersive');
+    window.umami?.track('microphone-enabled');
   } catch {
     error.textContent = 'Microphone access was blocked. Allow it in your browser and try again.';
     error.hidden = false;
@@ -320,6 +321,7 @@ sensitivityInput.addEventListener('input', () => {
 colorModeInput.addEventListener('change', () => {
   colorMode = colorModeInput.value;
   if (colorMode === 'random') randomHue = Math.random() * 360;
+  window.umami?.track('color-changed', { color: colorMode });
 });
 modeButtons.forEach((button) => button.addEventListener('click', () => {
   mode = button.dataset.mode;
@@ -329,6 +331,7 @@ modeButtons.forEach((button) => button.addEventListener('click', () => {
   const url = new URL(location.href);
   url.searchParams.set('mode', mode);
   history.replaceState({}, '', url);
+  window.umami?.track('visualization-changed', { visualization: mode });
 }));
 window.addEventListener('resize', resize);
 window.addEventListener('resize', () => { squares = []; });

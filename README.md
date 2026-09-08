@@ -15,6 +15,8 @@ Once microphone input is active, the interface fades into an immersive visual-on
 
 Microphone audio never leaves the browser and is not recorded.
 
+Anonymous, cookieless usage analytics are provided by Umami. The site records page visits, session duration, microphone activation, visualization changes, and color-preset changes; it never sends microphone audio or sensitivity values.
+
 ## Run locally
 
 ```bash
