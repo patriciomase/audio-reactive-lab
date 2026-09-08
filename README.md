@@ -10,6 +10,8 @@ Which visual direction feels worth developing into a customizable audiovisual in
 - **Terrain** — FFT history becomes a perspective spectrum landscape.
 - **Prism** — the time-domain waveform becomes a layered chromatic field.
 
+Once microphone input is active, the interface fades into an immersive visual-only state. Move the pointer to the right edge to reveal the sensitivity control.
+
 Microphone audio never leaves the browser and is not recorded.
 
 ## Run locally

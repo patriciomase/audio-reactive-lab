@@ -2,6 +2,7 @@ import './styles.css';
 
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
+const app = document.querySelector('main');
 const listenButton = document.querySelector('.listen');
 const status = document.querySelector('.status');
 const statusText = status.querySelector('span');
@@ -145,6 +146,7 @@ async function startAudio() {
     statusText.textContent = 'MIC LIVE';
     listenButton.classList.add('secondary');
     listenButton.textContent = 'Stop listening';
+    app.classList.add('immersive');
   } catch {
     error.textContent = 'Microphone access was blocked. Allow it in your browser and try again.';
     error.hidden = false;
@@ -159,6 +161,7 @@ function stopAudio() {
   statusText.textContent = 'DEMO SIGNAL';
   listenButton.classList.remove('secondary');
   listenButton.innerHTML = 'Enable microphone <span>↗</span>';
+  app.classList.remove('immersive');
 }
 
 listenButton.addEventListener('click', () => audio ? stopAudio() : startAudio());
