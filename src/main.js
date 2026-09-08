@@ -1107,7 +1107,7 @@ function drawGlyph(w, h, b) {
 
   glyphCtx.save();
   glyphCtx.globalCompositeOperation = 'destination-out';
-  glyphCtx.fillStyle = 'rgba(0, 0, 0, .0035)';
+  glyphCtx.fillStyle = 'rgba(0, 0, 0, .004375)';
   glyphCtx.fillRect(0, 0, glyphCanvas.width, glyphCanvas.height);
   glyphCtx.restore();
 
@@ -1118,10 +1118,10 @@ function drawGlyph(w, h, b) {
     && frame - glyphLastBeat > 14;
   if (beat) {
     const screenScale = glyphColumns * glyphRows / (80 * 45);
-    writeGlyphs(Math.max(18, Math.floor((65 + Math.min(1, b.level) * 260) * screenScale)), b, .38);
+    writeGlyphs(Math.max(14, Math.floor((65 + Math.min(1, b.level) * 260) * screenScale * .75)), b, .38);
     if (frame - glyphLastColorWave > 36) launchGlyphColorWave(b);
     glyphLastBeat = frame;
-  } else if (Math.random() < .12 + Math.min(.25, b.level * .2)) {
+  } else if (Math.random() < (.12 + Math.min(.25, b.level * .2)) * .75) {
     const screenScale = glyphColumns * glyphRows / (80 * 45);
     writeGlyphs(Math.max(1, Math.floor((1 + b.high * 7) * screenScale)), b, .72);
   }
