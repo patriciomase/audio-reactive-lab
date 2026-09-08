@@ -15,6 +15,7 @@ Which visual direction feels worth developing into a customizable audiovisual in
 - **Tunnel** — Terrain's spectrum history is wrapped into a cylindrical mesh that carries new rings through its length while smoothly tumbling around randomized X, Y, and Z axes.
 - **Trace** — when camera access is enabled, each bass beat freezes a colorized contour-only view; older outlines drift, enlarge, and fade while new moments accumulate above them.
 - **Equalizer** — a four-way mirrored classic bar spectrum gives extra response to the outer frequencies while a customizable, heavy filled title releases drifting color echoes on each beat.
+- **Glyph** — a dense character grid where beats write, replace, and slowly erase randomized symbols.
 
 Once microphone input is active, the interface fades into an immersive visual-only state. Move the pointer to the right edge to reveal sensitivity and color controls, or to the bottom edge to reveal visualization types. Color presets include Original, Dark, Colorful, Random, and Vibrant, and affect only the visualization elements—not the neutral background.
 

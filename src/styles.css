@@ -45,7 +45,7 @@ nav button { cursor: pointer; border: 0; border-radius: 9px; color: #777481; bac
   .meter { top: auto; bottom: 138px; right: 24px; width: calc(100vw - 48px); padding: 16px 0; gap: 16px; transform: none; }
   .status { display: none; }
   nav { width: calc(100vw - 24px); }
-  nav button { min-width: 0; flex: 1; padding: 10px 1px; font-size: 8.5px; letter-spacing: -.035em; }
+  nav button { min-width: 0; flex: 1; padding: 10px 1px; font-size: 8px; letter-spacing: -.045em; }
   nav button span { display: none; }
   .immersive .meter { transform: translateY(12px); }
   .immersive .meter:hover, .immersive .meter:focus-within { transform: none; }

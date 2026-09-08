@@ -18,7 +18,7 @@ const equalizerTextInput = document.querySelector('#equalizer-text');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel', 'trace', 'equalizer']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel', 'trace', 'equalizer', 'glyph']);
 const validColorModes = new Set([...colorModeInput.options].map((option) => option.value));
 let savedSettings = {};
 try {
@@ -64,9 +64,6 @@ let terrainDirection = 1;
 let terrainVelocity = .0045;
 let terrainTargetVelocity = .0045;
 let terrainNextTurnFrame = null;
-let universePreviousLow = 0;
-let universeLastRipple = -100;
-let universeRipples = [];
 let tangleDots = [];
 let tunnelHistory = [];
 let tunnelGrid = [];
@@ -84,6 +81,14 @@ let equalizerTextLayers = [];
 let equalizerPreviousLow = 0;
 let equalizerLowAverage = .12;
 let equalizerLastBeat = -100;
+const glyphCanvas = document.createElement('canvas');
+const glyphCtx = glyphCanvas.getContext('2d');
+let glyphColumns = 0;
+let glyphRows = 0;
+let glyphCell = 12;
+let glyphPreviousLow = 0;
+let glyphLowAverage = .12;
+let glyphLastBeat = -100;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -691,11 +696,11 @@ function drawOverlap(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawStarfield(w, h, b, intensity = 1) {
+function drawStarfield(w, h, b, intensity = 1, reactive = true) {
   const cx = w * .5;
   const cy = h * .48;
   const shortEdge = Math.min(w, h);
-  const flightSpeed = .0014 + b.high * .005;
+  const flightSpeed = reactive ? .0014 + b.high * .005 : .00055;
 
   ctx.globalCompositeOperation = 'lighter';
   universeStars.forEach((star) => {
@@ -729,53 +734,38 @@ function drawStarfield(w, h, b, intensity = 1) {
 
 function drawUniverse(w, h, b) {
   const cx = w * .5;
-  const cy = h * .48;
+  const cy = h * .5;
   const shortEdge = Math.min(w, h);
-  drawStarfield(w, h, b);
+  drawStarfield(w, h, b, .62, false);
 
   ctx.globalCompositeOperation = 'lighter';
-  const transient = b.low > .34 && b.low - universePreviousLow > .035;
-  if (transient && frame - universeLastRipple > 30) {
-    universeRipples.push({ radius: shortEdge * .06, alpha: .72, tilt: .26 + Math.random() * .12 });
-    universeLastRipple = frame;
-  }
-  universePreviousLow = b.low;
-  universeRipples = universeRipples.filter((ripple) => ripple.radius < Math.hypot(w, h) * .7 && ripple.alpha > .01);
-  universeRipples.forEach((ripple) => {
-    ripple.radius += 1.1 + b.low * 2.2;
-    ripple.alpha *= .992;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, ripple.radius, ripple.radius * ripple.tilt, frame * .0015, 0, Math.PI * 2);
-    ctx.strokeStyle = color(245 + ripple.radius * .04, 92, 68, ripple.alpha * .3);
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-  });
-
-  const galaxyRotation = frame * (.0012 + b.mid * .0014);
-  const galaxyRadius = shortEdge * (.31 + b.low * .035);
-  for (let index = 0; index < 620; index += 1) {
+  const galaxyRotation = frame * .00052;
+  const galaxyRadius = Math.max(shortEdge * .85, Math.max(w, h) * .68);
+  for (let index = 0; index < 1100; index += 1) {
     const band = index % 3 === 0 ? b.low : index % 3 === 1 ? b.mid : b.high;
     const arm = index % 4;
-    const distance = Math.sqrt((index + .5) / 620);
+    const distance = Math.sqrt((index + .5) / 1100);
     const noise = Math.sin(index * 91.733) * .5 + Math.sin(index * 17.17) * .5;
     const angle = arm * Math.PI / 2 + distance * 7.8 + galaxyRotation + noise * (.12 + distance * .18);
-    const radius = distance * galaxyRadius * (1 + band * .12);
+    const radius = distance * galaxyRadius;
     const x = cx + Math.cos(angle) * radius;
-    const y = cy + Math.sin(angle) * radius * (.25 + distance * .08) + Math.sin(angle * 2 + frame * .006) * band * 8;
+    const y = cy + Math.sin(angle) * radius * (.27 + distance * .08);
     const dust = 1 - distance;
+    const flicker = Math.pow(Math.max(0, Math.sin(frame * .035 + index * 2.417)), 14);
+    const highlight = Math.min(1, flicker * band * 2.8);
     ctx.beginPath();
-    ctx.fillStyle = color(205 + arm * 28 + distance * 65, 88, 58 + dust * 26, .08 + dust * .38 + band * .32);
-    ctx.arc(x, y, .35 + dust * 1.45 + band * 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = color(25 + arm * 34 + distance * 110, 82, 58 + dust * 26 + highlight * 14, .07 + dust * .3 + highlight * .72);
+    ctx.arc(x, y, .3 + dust * 1.25 + highlight * 3.2, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  const coreRadius = shortEdge * (.025 + b.low * .025);
-  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius * 5);
-  core.addColorStop(0, color(46, 100, 92, .92));
-  core.addColorStop(.18, color(285, 96, 72, .44 + b.low * .25));
-  core.addColorStop(1, color(230, 90, 50, 0));
+  const coreRadius = shortEdge * .018;
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius * 3.2);
+  core.addColorStop(0, 'rgba(255, 246, 220, .82)');
+  core.addColorStop(.2, 'rgba(255, 190, 115, .2)');
+  core.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = core;
-  ctx.fillRect(cx - coreRadius * 5, cy - coreRadius * 5, coreRadius * 10, coreRadius * 10);
+  ctx.fillRect(cx - coreRadius * 3.2, cy - coreRadius * 3.2, coreRadius * 6.4, coreRadius * 6.4);
   ctx.globalCompositeOperation = 'source-over';
 }
 
@@ -1023,6 +1013,83 @@ function drawEqualizer(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+const GLYPH_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+=<>?/\\[]{}:;~^';
+
+function resetGlyphCanvas(w = innerWidth, h = innerHeight) {
+  const scale = Math.min(1, 1920 / Math.max(1, w));
+  glyphCanvas.width = Math.max(1, Math.round(w * scale));
+  glyphCanvas.height = Math.max(1, Math.round(h * scale));
+  glyphColumns = Math.max(40, Math.min(160, Math.floor(glyphCanvas.width / 12)));
+  glyphCell = glyphCanvas.width / glyphColumns;
+  glyphRows = Math.ceil(glyphCanvas.height / glyphCell);
+  glyphCtx.textAlign = 'center';
+  glyphCtx.textBaseline = 'middle';
+}
+
+function writeGlyphs(count, b, replaceChance = .28) {
+  glyphCtx.font = `${Math.max(7, glyphCell * .82)}px DM Mono, monospace`;
+  for (let i = 0; i < count; i += 1) {
+    const column = Math.floor(Math.random() * glyphColumns);
+    const row = Math.floor(Math.random() * glyphRows);
+    const x = (column + .5) * glyphCell;
+    const y = (row + .53) * glyphCell;
+    if (Math.random() < replaceChance) {
+      glyphCtx.clearRect(column * glyphCell, row * glyphCell, glyphCell, glyphCell);
+    }
+    const character = GLYPH_CHARACTERS[Math.floor(Math.random() * GLYPH_CHARACTERS.length)];
+    const hue = 190 + column / glyphColumns * 150 + b.high * 80 + row / glyphRows * 35;
+    glyphCtx.fillStyle = color(hue, 78, 58 + Math.random() * 28, .16 + Math.random() * .78);
+    glyphCtx.fillText(character, x, y);
+  }
+}
+
+function drawGlyph(w, h, b) {
+  if (!glyphCanvas.width || Math.abs(glyphCanvas.width / glyphCanvas.height - w / h) > .01) {
+    resetGlyphCanvas(w, h);
+  }
+
+  glyphCtx.save();
+  glyphCtx.globalCompositeOperation = 'destination-out';
+  glyphCtx.fillStyle = 'rgba(0, 0, 0, .0035)';
+  glyphCtx.fillRect(0, 0, glyphCanvas.width, glyphCanvas.height);
+  glyphCtx.restore();
+
+  glyphLowAverage += (b.low - glyphLowAverage) * .025;
+  const beat = (audio
+    ? b.low > Math.max(.16, glyphLowAverage * 1.27) && b.low - glyphPreviousLow > .012
+    : frame % 52 === 0)
+    && frame - glyphLastBeat > 14;
+  if (beat) {
+    writeGlyphs(Math.floor(90 + Math.min(1, b.level) * 420), b, .38);
+    glyphLastBeat = frame;
+  } else if (Math.random() < .12 + Math.min(.25, b.level * .2)) {
+    writeGlyphs(1 + Math.floor(b.high * 7), b, .72);
+  }
+  glyphPreviousLow = b.low;
+
+  ctx.save();
+  ctx.globalAlpha = .94;
+  ctx.drawImage(glyphCanvas, 0, 0, w, h);
+  ctx.restore();
+
+  const cellWidth = w / glyphColumns;
+  const cellHeight = h / glyphRows;
+  ctx.beginPath();
+  for (let column = 1; column < glyphColumns; column += 1) {
+    const x = column * cellWidth;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+  }
+  for (let row = 1; row < glyphRows; row += 1) {
+    const y = row * cellHeight;
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+  }
+  ctx.strokeStyle = 'rgba(210, 220, 255, .022)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
 function draw() {
   frame += 1;
   const b = bands();
@@ -1036,6 +1103,7 @@ function draw() {
   if (mode === 'tunnel') drawTunnel(innerWidth, innerHeight, b);
   if (mode === 'trace') drawTrace(innerWidth, innerHeight, b);
   if (mode === 'equalizer') drawEqualizer(innerWidth, innerHeight, b);
+  if (mode === 'glyph') drawGlyph(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
 }
 
@@ -1143,10 +1211,10 @@ modeButtons.forEach((button) => button.addEventListener('click', async (event) =
   mode = button.dataset.mode;
   spectrumHistory = [];
   reverbWaves = [];
-  universeRipples = [];
   tunnelHistory = [];
   tunnelGrid = [];
   equalizerTextLayers = [];
+  if (mode === 'glyph') resetGlyphCanvas();
   if (previousMode === 'trace' && mode !== 'trace') traceLayers = [];
   modeButtons.forEach((item) => item.classList.toggle('active', item === button));
   app.classList.toggle('equalizer-mode', mode === 'equalizer');
@@ -1161,7 +1229,7 @@ modeButtons.forEach((button) => button.addEventListener('click', async (event) =
   window.umami?.track('visualization-changed', { visualization: mode });
 }));
 window.addEventListener('resize', resize);
-window.addEventListener('resize', () => { squares = []; tangleDots = []; });
+window.addEventListener('resize', () => { squares = []; tangleDots = []; resetGlyphCanvas(); });
 window.addEventListener('pointermove', (event) => {
   app.classList.toggle('show-modes', Boolean(audio) && event.clientY > innerHeight - 96);
 });
