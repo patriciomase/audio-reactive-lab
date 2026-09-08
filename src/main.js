@@ -13,7 +13,7 @@ const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel', 'trace']);
 const validColorModes = new Set([...colorModeInput.options].map((option) => option.value));
 let savedSettings = {};
 try {
@@ -56,6 +56,10 @@ const tunnelRotation = { x: .48, y: -.32, z: .12 };
 const tunnelVelocity = { x: .0018, y: -.0013, z: .0011 };
 const tunnelTargetVelocity = { ...tunnelVelocity };
 let tunnelNextDirection = 0;
+let traceLayers = [];
+let tracePreviousLow = 0;
+let traceLowAverage = .12;
+let traceLastBeat = -100;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -75,6 +79,11 @@ const universeStars = Array.from({ length: 340 }, () => ({
   size: .35 + Math.random() * 1.5,
   hue: 185 + Math.random() * 110,
 }));
+const traceVideo = document.createElement('video');
+const traceCapture = document.createElement('canvas');
+const traceCaptureCtx = traceCapture.getContext('2d', { willReadFrequently: true });
+traceVideo.muted = true;
+traceVideo.playsInline = true;
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
 
@@ -85,6 +94,13 @@ function saveSettings() {
     // The visualizer still works when storage is disabled or unavailable.
   }
 }
+
+function updateListenLabel() {
+  if (audio) return;
+  listenButton.innerHTML = `${mode === 'trace' ? 'Enable mic + camera' : 'Enable microphone'} <span>↗</span>`;
+}
+
+updateListenLabel();
 
 function average(data, from, to) {
   let sum = 0;
@@ -728,6 +744,118 @@ function drawUniverse(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+function hslToRgb(hue, saturation, lightness) {
+  const s = saturation / 100;
+  const l = lightness / 100;
+  const chroma = (1 - Math.abs(2 * l - 1)) * s;
+  const section = ((hue % 360) + 360) % 360 / 60;
+  const secondary = chroma * (1 - Math.abs(section % 2 - 1));
+  const channels = section < 1 ? [chroma, secondary, 0]
+    : section < 2 ? [secondary, chroma, 0]
+      : section < 3 ? [0, chroma, secondary]
+        : section < 4 ? [0, secondary, chroma]
+          : section < 5 ? [secondary, 0, chroma] : [chroma, 0, secondary];
+  const match = l - chroma / 2;
+  return channels.map((channel) => Math.round((channel + match) * 255));
+}
+
+function traceRgb(hue) {
+  if (colorMode === 'dark') return hslToRgb(225, 20, 48);
+  if (colorMode === 'colorful') return hslToRgb(hue + frame * .18, 90, 62);
+  if (colorMode === 'random') return hslToRgb(randomHue + hue * .42, 74, 60);
+  if (colorMode === 'vibrant') return hslToRgb(hue * 1.7 + 30, 100, 66);
+  return hslToRgb(hue, 88, 66);
+}
+
+function captureTrace(energy) {
+  if (traceVideo.readyState < 2 || !traceVideo.videoWidth) return;
+  const portrait = innerHeight > innerWidth;
+  const width = portrait ? 180 : 320;
+  const height = portrait ? 320 : 180;
+  traceCapture.width = width;
+  traceCapture.height = height;
+  const videoWidth = traceVideo.videoWidth;
+  const videoHeight = traceVideo.videoHeight;
+  const cropScale = Math.max(width / videoWidth, height / videoHeight);
+  const sourceWidth = width / cropScale;
+  const sourceHeight = height / cropScale;
+  const sourceX = (videoWidth - sourceWidth) / 2;
+  const sourceY = (videoHeight - sourceHeight) / 2;
+  traceCaptureCtx.save();
+  traceCaptureCtx.translate(width, 0);
+  traceCaptureCtx.scale(-1, 1);
+  traceCaptureCtx.drawImage(traceVideo, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+  traceCaptureCtx.restore();
+
+  const source = traceCaptureCtx.getImageData(0, 0, width, height);
+  const grayscale = new Uint8Array(width * height);
+  for (let pixel = 0; pixel < grayscale.length; pixel += 1) {
+    const offset = pixel * 4;
+    grayscale[pixel] = source.data[offset] * .299 + source.data[offset + 1] * .587 + source.data[offset + 2] * .114;
+  }
+  const outline = traceCaptureCtx.createImageData(width, height);
+  const hue = (190 + traceLayers.length * 37 + frame * .7) % 360;
+  const [red, green, blue] = traceRgb(hue);
+  const threshold = 30 - Math.min(10, energy * 12);
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const pixel = y * width + x;
+      const horizontal = grayscale[pixel + 1] - grayscale[pixel - 1];
+      const vertical = grayscale[pixel + width] - grayscale[pixel - width];
+      const strength = Math.abs(horizontal) + Math.abs(vertical);
+      if (strength < threshold) continue;
+      const offset = pixel * 4;
+      outline.data[offset] = red;
+      outline.data[offset + 1] = green;
+      outline.data[offset + 2] = blue;
+      outline.data[offset + 3] = Math.min(255, (strength - threshold) * 7);
+    }
+  }
+  const layerCanvas = document.createElement('canvas');
+  layerCanvas.width = width;
+  layerCanvas.height = height;
+  layerCanvas.getContext('2d').putImageData(outline, 0, 0);
+  traceLayers.push({
+    canvas: layerCanvas,
+    x: 0,
+    y: 0,
+    vx: (Math.random() * 2 - 1) * (.08 + energy * .12),
+    vy: (Math.random() * 2 - 1) * (.06 + energy * .09),
+    alpha: .92,
+    scale: 1,
+    growth: .00015 + Math.random() * .00028,
+  });
+  traceLayers = traceLayers.slice(-18);
+}
+
+function drawTrace(w, h, b) {
+  traceLowAverage += (b.low - traceLowAverage) * .025;
+  const beat = b.low > Math.max(.18, traceLowAverage * 1.32)
+    && b.low - tracePreviousLow > .014
+    && frame - traceLastBeat > 18;
+  if (beat) {
+    captureTrace(b.low);
+    traceLastBeat = frame;
+  }
+  tracePreviousLow = b.low;
+
+  ctx.globalCompositeOperation = 'lighter';
+  traceLayers = traceLayers.filter((layer) => layer.alpha > .018);
+  traceLayers.forEach((layer) => {
+    layer.x += layer.vx;
+    layer.y += layer.vy;
+    layer.scale += layer.growth;
+    layer.alpha *= .995;
+    const cover = Math.max(w / layer.canvas.width, h / layer.canvas.height) * layer.scale;
+    const drawWidth = layer.canvas.width * cover;
+    const drawHeight = layer.canvas.height * cover;
+    ctx.globalAlpha = layer.alpha;
+    ctx.drawImage(layer.canvas, (w - drawWidth) / 2 + layer.x, (h - drawHeight) / 2 + layer.y, drawWidth, drawHeight);
+  });
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 function draw() {
   frame += 1;
   const b = bands();
@@ -739,28 +867,63 @@ function draw() {
   if (mode === 'universe') drawUniverse(innerWidth, innerHeight, b);
   if (mode === 'tangle') drawTangle(innerWidth, innerHeight, b);
   if (mode === 'tunnel') drawTunnel(innerWidth, innerHeight, b);
+  if (mode === 'trace') drawTrace(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
+}
+
+async function enableTraceCamera() {
+  try {
+    error.hidden = true;
+    const cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } });
+    cameraStream.getVideoTracks().forEach((track) => audio.stream.addTrack(track));
+    traceVideo.srcObject = cameraStream;
+    await traceVideo.play();
+    audio.hasCamera = true;
+    statusText.textContent = 'MIC + CAMERA LIVE';
+  } catch {
+    error.textContent = 'Camera access was blocked. Allow it in your browser to use Trace.';
+    error.hidden = false;
+  }
+}
+
+function disableTraceCamera() {
+  if (!audio?.hasCamera) return;
+  audio.stream.getVideoTracks().forEach((track) => track.stop());
+  audio.hasCamera = false;
+  traceVideo.pause();
+  traceVideo.srcObject = null;
+  statusText.textContent = 'MIC LIVE';
 }
 
 async function startAudio() {
   try {
     error.hidden = true;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const needsCamera = mode === 'trace';
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      ...(needsCamera ? { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : {}),
+    });
     const context = new AudioContext();
     const source = context.createMediaStreamSource(stream);
     const analyser = context.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = .78;
     source.connect(analyser);
-    audio = { context, stream, analyser, frequency: new Uint8Array(analyser.frequencyBinCount), waveform: new Uint8Array(analyser.fftSize) };
+    audio = { context, stream, analyser, frequency: new Uint8Array(analyser.frequencyBinCount), waveform: new Uint8Array(analyser.fftSize), hasCamera: needsCamera };
+    if (needsCamera) {
+      traceVideo.srcObject = new MediaStream(stream.getVideoTracks());
+      await traceVideo.play();
+    }
     status.classList.add('live');
-    statusText.textContent = 'MIC LIVE';
+    statusText.textContent = needsCamera ? 'MIC + CAMERA LIVE' : 'MIC LIVE';
     listenButton.classList.add('secondary');
     listenButton.textContent = 'Stop listening';
     app.classList.add('immersive');
     window.umami?.track('microphone-enabled');
   } catch {
-    error.textContent = 'Microphone access was blocked. Allow it in your browser and try again.';
+    error.textContent = mode === 'trace'
+      ? 'Microphone or camera access was blocked. Allow both in your browser and try again.'
+      : 'Microphone access was blocked. Allow it in your browser and try again.';
     error.hidden = false;
   }
 }
@@ -769,10 +932,12 @@ function stopAudio() {
   audio.stream.getTracks().forEach((track) => track.stop());
   audio.context.close();
   audio = null;
+  traceVideo.pause();
+  traceVideo.srcObject = null;
   status.classList.remove('live');
   statusText.textContent = 'DEMO SIGNAL';
   listenButton.classList.remove('secondary');
-  listenButton.innerHTML = 'Enable microphone <span>↗</span>';
+  updateListenLabel();
   app.classList.remove('immersive', 'show-modes');
 }
 
@@ -788,7 +953,7 @@ colorModeInput.addEventListener('change', () => {
   saveSettings();
   window.umami?.track('color-changed', { color: colorMode });
 });
-modeButtons.forEach((button) => button.addEventListener('click', () => {
+modeButtons.forEach((button) => button.addEventListener('click', async () => {
   mode = button.dataset.mode;
   spectrumHistory = [];
   reverbWaves = [];
@@ -800,6 +965,9 @@ modeButtons.forEach((button) => button.addEventListener('click', () => {
   url.searchParams.set('mode', mode);
   history.replaceState({}, '', url);
   saveSettings();
+  if (!audio) updateListenLabel();
+  else if (mode === 'trace' && !audio.hasCamera) await enableTraceCamera();
+  else if (mode !== 'trace') disableTraceCamera();
   window.umami?.track('visualization-changed', { visualization: mode });
 }));
 window.addEventListener('resize', resize);

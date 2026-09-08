@@ -13,10 +13,11 @@ Which visual direction feels worth developing into a customizable audiovisual in
 - **Universe** — a deep-space flight through layered stars and a four-armed galaxy; bass bends the core and releases gravitational ripples, mids turn the galaxy, and treble accelerates the starfield.
 - **Tangle** — frequency-mapped dots bounce independently while remaining a single closed loop; self-crossing interior facets accumulate into colored regions, bass deepens the fill, and treble energizes the connections.
 - **Tunnel** — Terrain's spectrum history is wrapped into a cylindrical mesh that carries new rings through its length while smoothly tumbling around randomized X, Y, and Z axes.
+- **Trace** — when camera access is enabled, each bass beat freezes a colorized contour-only view; older outlines drift, enlarge, and fade while new moments accumulate above them.
 
 Once microphone input is active, the interface fades into an immersive visual-only state. Move the pointer to the right edge to reveal sensitivity and color controls, or to the bottom edge to reveal visualization types. Color presets include Original, Dark, Colorful, Random, and Vibrant, and affect only the visualization elements—not the neutral background.
 
-Microphone audio never leaves the browser and is not recorded.
+Microphone audio and optional Trace camera frames never leave the browser and are not recorded. Trace keeps only a short-lived set of processed contour layers in memory; the original camera image is never displayed or stored.
 
 Anonymous, cookieless usage analytics are provided by Umami. The site records page visits, session duration, microphone activation, visualization changes, and color-preset changes; it never sends microphone audio or sensitivity values.
 
