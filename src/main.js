@@ -12,11 +12,24 @@ const sensitivityValue = document.querySelector('.meter b');
 const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
+const SETTINGS_KEY = 'audio-reactive-lab-settings';
 const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle']);
+const validColorModes = new Set([...colorModeInput.options].map((option) => option.value));
+let savedSettings = {};
+try {
+  savedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY)) ?? {};
+} catch {
+  savedSettings = {};
+}
 const requestedMode = new URLSearchParams(location.search).get('mode');
-let mode = validModes.has(requestedMode) ? requestedMode : 'orbit';
-let sensitivity = Number(sensitivityInput.value);
-let colorMode = colorModeInput.value;
+let mode = validModes.has(requestedMode) ? requestedMode : validModes.has(savedSettings.mode) ? savedSettings.mode : 'orbit';
+let sensitivity = Number.isFinite(Number(savedSettings.sensitivity))
+  ? Math.max(Number(sensitivityInput.min), Math.min(Number(sensitivityInput.max), Number(savedSettings.sensitivity)))
+  : Number(sensitivityInput.value);
+let colorMode = validColorModes.has(savedSettings.colorMode) ? savedSettings.colorMode : colorModeInput.value;
+sensitivityInput.value = sensitivity;
+sensitivityValue.textContent = sensitivity.toFixed(1);
+colorModeInput.value = colorMode;
 let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
@@ -58,6 +71,14 @@ const universeStars = Array.from({ length: 340 }, () => ({
 }));
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
+
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode }));
+  } catch {
+    // The visualizer still works when storage is disabled or unavailable.
+  }
+}
 
 function average(data, from, to) {
   let sum = 0;
@@ -270,7 +291,7 @@ function createSquares(w, h) {
   squares = Array.from({ length: count }, (_, index) => {
     const size = 74 + ((index * 47) % 128);
     const angle = index * 2.399;
-    const shade = Math.random() * 34;
+    const shade = Math.random() * 16;
     const fadeDuration = 10000 + Math.random() * 8000;
     return {
       x: w * (.18 + ((index * .173) % .64)),
@@ -287,7 +308,7 @@ function createSquares(w, h) {
       spin: (.0012 + Math.random() * .0032) * (index % 2 ? -1 : 1),
       shade,
       shadeFrom: shade,
-      shadeTarget: Math.random() < .3 ? 0 : 7 + Math.random() * 29,
+      shadeTarget: Math.random() < .3 ? 0 : 4 + Math.random() * 16,
       fadeStarted: now - Math.random() * fadeDuration,
       fadeDuration,
     };
@@ -445,7 +466,7 @@ function drawOverlap(w, h, b) {
     square.shade = square.shadeFrom + (square.shadeTarget - square.shadeFrom) * easedFade;
     if (fadeProgress >= 1) {
       square.shadeFrom = square.shade;
-      square.shadeTarget = Math.random() < .3 ? 0 : 7 + Math.random() * 29;
+      square.shadeTarget = Math.random() < .3 ? 0 : 4 + Math.random() * 16;
       square.fadeStarted = now;
       square.fadeDuration = 10000 + Math.random() * 8000;
     }
@@ -503,8 +524,8 @@ function drawOverlap(w, h, b) {
 
   boxes.forEach((box) => {
     ctx.fillStyle = `rgb(${box.shade}, ${box.shade}, ${box.shade + 2})`;
-    ctx.strokeStyle = `rgba(225, 225, 232, ${.14 + box.energy * .48})`;
-    ctx.lineWidth = 1 + box.energy * 1.2;
+    ctx.strokeStyle = `rgba(238, 238, 245, ${Math.min(.92, .34 + box.energy * .52)})`;
+    ctx.lineWidth = 1.25 + box.energy * 1.35;
     shapePath(box);
     ctx.fill();
     ctx.stroke();
@@ -670,10 +691,12 @@ listenButton.addEventListener('click', () => audio ? stopAudio() : startAudio())
 sensitivityInput.addEventListener('input', () => {
   sensitivity = Number(sensitivityInput.value);
   sensitivityValue.textContent = sensitivity.toFixed(1);
+  saveSettings();
 });
 colorModeInput.addEventListener('change', () => {
   colorMode = colorModeInput.value;
   if (colorMode === 'random') randomHue = Math.random() * 360;
+  saveSettings();
   window.umami?.track('color-changed', { color: colorMode });
 });
 modeButtons.forEach((button) => button.addEventListener('click', () => {
@@ -685,6 +708,7 @@ modeButtons.forEach((button) => button.addEventListener('click', () => {
   const url = new URL(location.href);
   url.searchParams.set('mode', mode);
   history.replaceState({}, '', url);
+  saveSettings();
   window.umami?.track('visualization-changed', { visualization: mode });
 }));
 window.addEventListener('resize', resize);
