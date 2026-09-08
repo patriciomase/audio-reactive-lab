@@ -12,7 +12,7 @@ const sensitivityValue = document.querySelector('.meter b');
 const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'dancers']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'dancers', 'universe']);
 const requestedMode = new URLSearchParams(location.search).get('mode');
 let mode = validModes.has(requestedMode) ? requestedMode : 'orbit';
 let sensitivity = Number(sensitivityInput.value);
@@ -33,6 +33,9 @@ let terrainDirection = 1;
 let terrainVelocity = .0045;
 let terrainTargetVelocity = .0045;
 let terrainNextTurnFrame = null;
+let universePreviousLow = 0;
+let universeLastRipple = -100;
+let universeRipples = [];
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -57,6 +60,13 @@ const dancers = Array.from({ length: 7 }, (_, index) => ({
   depth: .58 + ((index * 37) % 42) / 100,
   phase: index * .91,
   hue: 180 + index * 31,
+}));
+const universeStars = Array.from({ length: 340 }, () => ({
+  x: Math.random() * 2 - 1,
+  y: Math.random() * 2 - 1,
+  z: .12 + Math.random() * .88,
+  size: .35 + Math.random() * 1.5,
+  hue: 185 + Math.random() * 110,
 }));
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
@@ -429,10 +439,6 @@ function drawOverlap(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function endpoint(origin, length, angle) {
-  return { x: origin.x + Math.cos(angle) * length, y: origin.y + Math.sin(angle) * length };
-}
-
 function drawLimb(context, points, width) {
   context.beginPath();
   context.moveTo(points[0].x, points[0].y);
@@ -443,36 +449,44 @@ function drawLimb(context, points, width) {
   context.stroke();
 }
 
-function renderDancer(phase, b, strokeColor) {
+function renderDancer(phase, b, strokeColor, style) {
   dancerMaskCtx.clearRect(0, 0, dancerMask.width, dancerMask.height);
   dancerMaskCtx.fillStyle = '#fff';
   dancerMaskCtx.strokeStyle = '#fff';
 
-  const beat = Math.max(0, Math.sin(phase * 2)) * b.low;
-  const bounce = Math.sin(phase * 2) * (5 + b.low * 14) - beat * 10;
-  const lean = Math.sin(phase * .73) * (8 + b.mid * 12);
-  const pelvis = { x: 110, y: 205 + bounce };
-  const chest = { x: 110 + lean, y: 128 + bounce * .55 };
-  const neck = { x: chest.x + lean * .18, y: chest.y - 27 };
+  const groove = Math.sin(phase);
+  const counterGroove = Math.sin(phase + Math.PI / 2);
+  const beat = Math.pow(Math.max(0, Math.sin(phase * 2)), 2);
+  const bounce = -beat * (4 + b.low * 9);
+  const sway = groove * (8 + b.mid * 8);
+  const pelvis = { x: 110 + sway * .42, y: 205 + bounce };
+  const chest = { x: 110 - sway * .28, y: 130 + bounce * .62 };
+  const neck = { x: chest.x - sway * .08, y: chest.y - 27 };
   const shoulderL = { x: chest.x - 27, y: chest.y + 2 };
   const shoulderR = { x: chest.x + 27, y: chest.y - 2 };
   const hipL = { x: pelvis.x - 18, y: pelvis.y };
   const hipR = { x: pelvis.x + 18, y: pelvis.y };
 
   drawLimb(dancerMaskCtx, [neck, chest, pelvis], 43);
-  const armSwing = Math.sin(phase) * (1 + b.mid * .5);
-  const elbowL = endpoint(shoulderL, 48, 2.35 + armSwing * .72);
-  const handL = endpoint(elbowL, 50, 1.9 + Math.sin(phase * 1.31 + 1) * 1.05);
-  const elbowR = endpoint(shoulderR, 48, .8 + armSwing * .72);
-  const handR = endpoint(elbowR, 50, 1.15 + Math.sin(phase * 1.17 + 2) * 1.05);
+  const gestures = [
+    [{ x: 54 + groove * 8, y: 54 - b.high * 12 }, { x: 177, y: 142 + counterGroove * 20 }],
+    [{ x: 48, y: 125 + groove * 24 }, { x: 172, y: 76 - counterGroove * 18 }],
+    [{ x: 68 + groove * 12, y: 82 }, { x: 153 + counterGroove * 15, y: 82 + groove * 15 }],
+  ][style % 3];
+  const handL = gestures[0];
+  const handR = gestures[1];
+  const elbowL = { x: (shoulderL.x + handL.x) / 2 - 14, y: (shoulderL.y + handL.y) / 2 + 5 };
+  const elbowR = { x: (shoulderR.x + handR.x) / 2 + 14, y: (shoulderR.y + handR.y) / 2 + 5 };
   drawLimb(dancerMaskCtx, [shoulderL, elbowL, handL], 17);
   drawLimb(dancerMaskCtx, [shoulderR, elbowR, handR], 17);
 
-  const stride = Math.sin(phase) * (.48 + b.low * .28);
-  const kneeL = endpoint(hipL, 61, 1.62 + stride);
-  const footL = endpoint(kneeL, 62, 1.47 - stride * .52);
-  const kneeR = endpoint(hipR, 61, 1.52 - stride);
-  const footR = endpoint(kneeR, 62, 1.67 + stride * .52);
+  // The feet stay planted most of the time; shifting the knees and pelvis sells
+  // weight transfer without making the figure look airborne or distressed.
+  const step = style % 2 ? counterGroove : groove;
+  const footL = { x: 72 - Math.max(0, -step) * (8 + b.low * 8), y: 318 - Math.max(0, step) * b.low * 7 };
+  const footR = { x: 148 + Math.max(0, step) * (8 + b.low * 8), y: 318 - Math.max(0, -step) * b.low * 7 };
+  const kneeL = { x: 86 + sway * .22 - step * 6, y: 260 + Math.abs(step) * 5 };
+  const kneeR = { x: 134 + sway * .22 - step * 6, y: 260 + Math.abs(step) * 5 };
   drawLimb(dancerMaskCtx, [hipL, kneeL, footL], 22);
   drawLimb(dancerMaskCtx, [hipR, kneeR, footR], 22);
 
@@ -495,21 +509,96 @@ function renderDancer(phase, b, strokeColor) {
 }
 
 function drawDancers(w, h, b) {
-  const tempo = frame * (.018 + b.mid * .018);
+  const tempo = frame * (.007 + b.mid * .006);
   const floor = h * .92;
   const activeDancers = dancers.slice(0, w < 600 ? 4 : dancers.length);
   ctx.globalCompositeOperation = 'lighter';
   activeDancers.forEach((dancer, index) => {
     const scale = dancer.depth * Math.min(1, h / 690, w / 1050);
-    const phase = tempo + dancer.phase + Math.sin(frame * .003 + index) * .24;
-    const x = w * ((index + .5) / activeDancers.length) + Math.sin(phase * .37 + index) * (12 + b.mid * 18);
-    for (let trail = 2; trail >= 0; trail -= 1) {
-      const alpha = trail === 0 ? .62 + b.level * .35 : .055 + b.high * .06;
-      renderDancer(phase - trail * (.14 + b.high * .12), b, color(dancer.hue + trail * 24 + frame * .04, 88, 68, alpha));
-      const drift = trail * (5 + b.high * 8);
-      ctx.drawImage(dancerOutline, x - dancerOutline.width * scale / 2 - drift, floor - dancerOutline.height * scale, dancerOutline.width * scale, dancerOutline.height * scale);
-    }
+    const phase = tempo + dancer.phase * .72;
+    const x = w * ((index + .5) / activeDancers.length) + Math.sin(phase * .5 + index) * (4 + b.mid * 7);
+    renderDancer(phase, b, color(dancer.hue + frame * .025, 88, 68, .68 + b.level * .3), index);
+    ctx.drawImage(dancerOutline, x - dancerOutline.width * scale / 2, floor - dancerOutline.height * scale, dancerOutline.width * scale, dancerOutline.height * scale);
   });
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawUniverse(w, h, b) {
+  const cx = w * .5;
+  const cy = h * .48;
+  const shortEdge = Math.min(w, h);
+  const flightSpeed = .0014 + b.high * .005;
+
+  ctx.globalCompositeOperation = 'lighter';
+  universeStars.forEach((star) => {
+    const oldZ = star.z;
+    star.z -= flightSpeed;
+    if (star.z < .06) {
+      star.x = Math.random() * 2 - 1;
+      star.y = Math.random() * 2 - 1;
+      star.z = 1;
+    }
+    const spread = shortEdge * .58;
+    const x = cx + star.x / star.z * spread;
+    const y = cy + star.y / star.z * spread;
+    const oldX = cx + star.x / oldZ * spread;
+    const oldY = cy + star.y / oldZ * spread;
+    if (x < -40 || x > w + 40 || y < -40 || y > h + 40) {
+      star.x = (Math.random() * 2 - 1) * .3;
+      star.y = (Math.random() * 2 - 1) * .3;
+      star.z = 1;
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(oldX, oldY);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = color(star.hue, 72, 78, .12 + (1 - star.z) * .58 + b.high * .2);
+    ctx.lineWidth = star.size * (1.15 - star.z) + b.high * 1.2;
+    ctx.stroke();
+  });
+
+  const transient = b.low > .34 && b.low - universePreviousLow > .035;
+  if (transient && frame - universeLastRipple > 30) {
+    universeRipples.push({ radius: shortEdge * .06, alpha: .72, tilt: .26 + Math.random() * .12 });
+    universeLastRipple = frame;
+  }
+  universePreviousLow = b.low;
+  universeRipples = universeRipples.filter((ripple) => ripple.radius < Math.hypot(w, h) * .7 && ripple.alpha > .01);
+  universeRipples.forEach((ripple) => {
+    ripple.radius += 1.1 + b.low * 2.2;
+    ripple.alpha *= .992;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, ripple.radius, ripple.radius * ripple.tilt, frame * .0015, 0, Math.PI * 2);
+    ctx.strokeStyle = color(245 + ripple.radius * .04, 92, 68, ripple.alpha * .3);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  });
+
+  const galaxyRotation = frame * (.0012 + b.mid * .0014);
+  const galaxyRadius = shortEdge * (.31 + b.low * .035);
+  for (let index = 0; index < 620; index += 1) {
+    const band = index % 3 === 0 ? b.low : index % 3 === 1 ? b.mid : b.high;
+    const arm = index % 4;
+    const distance = Math.sqrt((index + .5) / 620);
+    const noise = Math.sin(index * 91.733) * .5 + Math.sin(index * 17.17) * .5;
+    const angle = arm * Math.PI / 2 + distance * 7.8 + galaxyRotation + noise * (.12 + distance * .18);
+    const radius = distance * galaxyRadius * (1 + band * .12);
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius * (.25 + distance * .08) + Math.sin(angle * 2 + frame * .006) * band * 8;
+    const dust = 1 - distance;
+    ctx.beginPath();
+    ctx.fillStyle = color(205 + arm * 28 + distance * 65, 88, 58 + dust * 26, .08 + dust * .38 + band * .32);
+    ctx.arc(x, y, .35 + dust * 1.45 + band * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const coreRadius = shortEdge * (.025 + b.low * .025);
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius * 5);
+  core.addColorStop(0, color(46, 100, 92, .92));
+  core.addColorStop(.18, color(285, 96, 72, .44 + b.low * .25));
+  core.addColorStop(1, color(230, 90, 50, 0));
+  ctx.fillStyle = core;
+  ctx.fillRect(cx - coreRadius * 5, cy - coreRadius * 5, coreRadius * 10, coreRadius * 10);
   ctx.globalCompositeOperation = 'source-over';
 }
 
@@ -522,6 +611,7 @@ function draw() {
   if (mode === 'prism') drawPrism(innerWidth, innerHeight, b);
   if (mode === 'overlap') drawOverlap(innerWidth, innerHeight, b);
   if (mode === 'dancers') drawDancers(innerWidth, innerHeight, b);
+  if (mode === 'universe') drawUniverse(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
 }
 
@@ -573,6 +663,7 @@ modeButtons.forEach((button) => button.addEventListener('click', () => {
   mode = button.dataset.mode;
   spectrumHistory = [];
   reverbWaves = [];
+  universeRipples = [];
   modeButtons.forEach((item) => item.classList.toggle('active', item === button));
   const url = new URL(location.href);
   url.searchParams.set('mode', mode);
