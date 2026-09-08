@@ -73,6 +73,7 @@ let traceLayers = [];
 let tracePreviousLow = 0;
 let traceLowAverage = .12;
 let traceLastBeat = -100;
+let traceLastAttempt = -100;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -793,8 +794,8 @@ function traceRgb(hue) {
 function captureTrace(energy) {
   if (traceVideo.readyState < 2 || !traceVideo.videoWidth) return;
   const portrait = innerHeight > innerWidth;
-  const width = portrait ? 180 : 320;
-  const height = portrait ? 320 : 180;
+  const width = portrait ? 270 : 480;
+  const height = portrait ? 480 : 270;
   traceCapture.width = width;
   traceCapture.height = height;
   const videoWidth = traceVideo.videoWidth;
@@ -816,28 +817,49 @@ function captureTrace(energy) {
     const offset = pixel * 4;
     grayscale[pixel] = source.data[offset] * .299 + source.data[offset + 1] * .587 + source.data[offset + 2] * .114;
   }
-  const outline = traceCaptureCtx.createImageData(width, height);
-  const hue = (190 + traceLayers.length * 37 + frame * .7) % 360;
-  const [red, green, blue] = traceRgb(hue);
-  const threshold = 30 - Math.min(10, energy * 12);
+  const gradients = new Uint16Array(width * height);
+  let gradientTotal = 0;
   for (let y = 1; y < height - 1; y += 1) {
     for (let x = 1; x < width - 1; x += 1) {
       const pixel = y * width + x;
       const horizontal = grayscale[pixel + 1] - grayscale[pixel - 1];
       const vertical = grayscale[pixel + width] - grayscale[pixel - width];
       const strength = Math.abs(horizontal) + Math.abs(vertical);
+      gradients[pixel] = strength;
+      gradientTotal += strength;
+    }
+  }
+  const outline = traceCaptureCtx.createImageData(width, height);
+  const hue = (190 + traceLayers.length * 37 + frame * .7) % 360;
+  const [red, green, blue] = traceRgb(hue);
+  const meanGradient = gradientTotal / ((width - 2) * (height - 2));
+  const threshold = Math.max(8, Math.min(34, meanGradient * 1.7 - Math.min(7, energy * 9)));
+  let edgePixels = 0;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const pixel = y * width + x;
+      const horizontal = grayscale[pixel + 1] - grayscale[pixel - 1];
+      const vertical = grayscale[pixel + width] - grayscale[pixel - width];
+      const strength = gradients[pixel];
       if (strength < threshold) continue;
+      const isHorizontalEdge = Math.abs(horizontal) >= Math.abs(vertical);
+      const before = gradients[pixel - (isHorizontalEdge ? 1 : width)];
+      const after = gradients[pixel + (isHorizontalEdge ? 1 : width)];
+      if (strength < before || strength < after) continue;
       const offset = pixel * 4;
       outline.data[offset] = red;
       outline.data[offset + 1] = green;
       outline.data[offset + 2] = blue;
       outline.data[offset + 3] = Math.min(255, (strength - threshold) * 7);
+      edgePixels += 1;
     }
   }
+  if (edgePixels < width * height * .001) return false;
   const layerCanvas = document.createElement('canvas');
   layerCanvas.width = width;
   layerCanvas.height = height;
   layerCanvas.getContext('2d').putImageData(outline, 0, 0);
+  traceLayers.forEach((layer) => { layer.latest = false; });
   traceLayers.push({
     canvas: layerCanvas,
     x: 0,
@@ -847,28 +869,32 @@ function captureTrace(energy) {
     alpha: .92,
     scale: 1,
     growth: .00015 + Math.random() * .00028,
+    latest: true,
   });
   traceLayers = traceLayers.slice(-18);
+  return true;
 }
 
 function drawTrace(w, h, b) {
+  drawStarfield(w, h, b, .14);
   traceLowAverage += (b.low - traceLowAverage) * .025;
   const beat = b.low > Math.max(.18, traceLowAverage * 1.32)
     && b.low - tracePreviousLow > .014
     && frame - traceLastBeat > 18;
-  if (beat) {
-    captureTrace(b.low);
-    traceLastBeat = frame;
+  const needsRefresh = traceLayers.length === 0 || frame - traceLastBeat > 180;
+  if ((beat || needsRefresh) && frame - traceLastAttempt > 15) {
+    if (captureTrace(b.low)) traceLastBeat = frame;
+    traceLastAttempt = frame;
   }
   tracePreviousLow = b.low;
 
   ctx.globalCompositeOperation = 'lighter';
-  traceLayers = traceLayers.filter((layer) => layer.alpha > .018);
+  traceLayers = traceLayers.filter((layer) => layer.latest || layer.alpha > .018);
   traceLayers.forEach((layer) => {
     layer.x += layer.vx;
     layer.y += layer.vy;
     layer.scale += layer.growth;
-    layer.alpha *= .995;
+    layer.alpha = layer.latest ? Math.max(.16, layer.alpha * .9965) : layer.alpha * .995;
     const cover = Math.max(w / layer.canvas.width, h / layer.canvas.height) * layer.scale;
     const drawWidth = layer.canvas.width * cover;
     const drawHeight = layer.canvas.height * cover;
@@ -990,12 +1016,14 @@ transitionTimeInput.addEventListener('input', () => {
   scheduleCarousel();
 });
 modeButtons.forEach((button) => button.addEventListener('click', async (event) => {
+  const previousMode = mode;
   mode = button.dataset.mode;
   spectrumHistory = [];
   reverbWaves = [];
   universeRipples = [];
   tunnelHistory = [];
   tunnelGrid = [];
+  if (previousMode === 'trace' && mode !== 'trace') traceLayers = [];
   modeButtons.forEach((item) => item.classList.toggle('active', item === button));
   const url = new URL(location.href);
   url.searchParams.set('mode', mode);
