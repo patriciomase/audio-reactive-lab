@@ -21,6 +21,12 @@ let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
 let spectrumHistory = [];
+let reverbWaves = [];
+let previousLow = 0;
+let orbitAngle = 0;
+let orbitDirection = 1;
+let reverseUntil = 0;
+let lastWaveFrame = -100;
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
 
@@ -77,13 +83,35 @@ function drawBackground(w, h, b) {
 
 function drawOrbit(w, h, b) {
   const cx = w / 2, cy = h / 2;
+  const transient = b.low > .38 && b.low - previousLow > .045;
+  const waveInterval = Math.max(52, 125 - b.level * 90);
+  if ((transient || frame - lastWaveFrame > waveInterval) && frame - lastWaveFrame > 28) {
+    reverbWaves.push({ radius: 55, alpha: Math.min(.75, .28 + b.low * .55), hue: 245 + b.high * 100, speed: 2.6 + b.low * 4.2 });
+    if (transient) reverseUntil = frame + 34;
+    lastWaveFrame = frame;
+  }
+  const targetDirection = frame < reverseUntil ? -1 : 1;
+  orbitDirection += (targetDirection - orbitDirection) * (targetDirection < 0 ? .24 : .1);
+  orbitAngle += .008 * orbitDirection;
+  previousLow = b.low;
+
   ctx.globalCompositeOperation = 'lighter';
+  reverbWaves = reverbWaves.filter((wave) => wave.radius < Math.hypot(w, h) * .62 && wave.alpha > .008);
+  reverbWaves.forEach((wave) => {
+    wave.radius += wave.speed;
+    wave.alpha *= .986;
+    ctx.beginPath();
+    ctx.strokeStyle = color(wave.hue, 88, 68, wave.alpha);
+    ctx.lineWidth = 1.2 + wave.alpha * 2;
+    ctx.ellipse(cx, cy, wave.radius, wave.radius * .72, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  });
   for (let ring = 0; ring < 5; ring += 1) {
     const energy = ring < 2 ? b.low : ring < 4 ? b.mid : b.high;
     const count = 28 + ring * 12;
     const radius = 80 + ring * 46 + energy * 65;
     for (let i = 0; i < count; i += 1) {
-      const a = (i / count) * Math.PI * 2 + frame * (0.002 + ring * 0.0007) * (ring % 2 ? -1 : 1);
+      const a = (i / count) * Math.PI * 2 + orbitAngle * (1 + ring * .18) * (ring % 2 ? -1 : 1);
       const wobble = Math.sin(a * (3 + ring) + frame * .018) * (8 + energy * 24);
       const x = cx + Math.cos(a) * (radius + wobble);
       const y = cy + Math.sin(a) * (radius + wobble) * .72;
@@ -103,15 +131,33 @@ function drawTerrain(w, h, b) {
   }
   spectrumHistory.unshift(sample);
   spectrumHistory = spectrumHistory.slice(0, 30);
+  const yaw = Math.sin(frame * .006) * .34 + (b.mid - .2) * .22;
+  const pitch = .9 + Math.sin(frame * .004) * .08;
+  const roll = Math.sin(frame * .008) * .035 + b.high * .05;
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const cosX = Math.cos(pitch), sinX = Math.sin(pitch);
+  const cosZ = Math.cos(roll), sinZ = Math.sin(roll);
+  const focal = Math.max(w, h) * 1.15;
+  const project = (x, y, z) => {
+    const x1 = x * cosY - z * sinY;
+    const z1 = x * sinY + z * cosY;
+    const y2 = y * cosX - z1 * sinX;
+    const z2 = y * sinX + z1 * cosX;
+    const x3 = x1 * cosZ - y2 * sinZ;
+    const y3 = x1 * sinZ + y2 * cosZ;
+    const scale = focal / (focal + z2);
+    return { x: w / 2 + x3 * scale, y: h * .56 + y3 * scale };
+  };
+
   ctx.lineWidth = 1.2;
   spectrumHistory.forEach((row, z) => {
-    const perspective = 1 - z / 48;
-    const baseY = h * .72 - z * 10;
     ctx.beginPath();
     row.forEach((value, i) => {
-      const x = w / 2 + (i - row.length / 2) * (w / 45) * perspective;
-      const y = baseY - value * (170 + b.low * 100) * perspective;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      const x = (i / (row.length - 1) - .5) * w * .9;
+      const depth = (z / 29 - .5) * h * .9;
+      const height = -value * h * (.28 + b.low * .12);
+      const point = project(x, height, depth);
+      if (i === 0) ctx.moveTo(point.x, point.y); else ctx.lineTo(point.x, point.y);
     });
     ctx.strokeStyle = color(190 + z * 4 + b.high * 80, 90, 64, .85 - z / 38);
     ctx.stroke();
@@ -190,6 +236,7 @@ colorModeInput.addEventListener('change', () => {
 modeButtons.forEach((button) => button.addEventListener('click', () => {
   mode = button.dataset.mode;
   spectrumHistory = [];
+  reverbWaves = [];
   modeButtons.forEach((item) => item.classList.toggle('active', item === button));
   const url = new URL(location.href);
   url.searchParams.set('mode', mode);

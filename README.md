@@ -6,8 +6,8 @@ An experimental, microphone-driven visual playground inspired by classic Winamp 
 
 Which visual direction feels worth developing into a customizable audiovisual instrument? This throwaway first pass provides three modes on one route:
 
-- **Orbit** — low/mid/high frequency bands drive layered particle rings.
-- **Terrain** — FFT history becomes a perspective spectrum landscape.
+- **Orbit** — low/mid/high frequency bands drive layered particle rings; transients emit expanding reverb waves and briefly reverse orbital direction.
+- **Terrain** — FFT history becomes a rotating 3D spectrum landscape spanning roughly 90% of the viewport.
 - **Prism** — the time-domain waveform becomes a layered chromatic field.
 
 Once microphone input is active, the interface fades into an immersive visual-only state. Move the pointer to the right edge to reveal sensitivity and color controls. Color presets include Original, Dark, Colorful, Random, and Vibrant.
