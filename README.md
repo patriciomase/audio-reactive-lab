@@ -9,7 +9,7 @@ Which visual direction feels worth developing into a customizable audiovisual in
 - **Orbit** — low/mid/high frequency bands drive layered particle rings with subtly varied electron sizes; long-lived echoes capture the current formation, expand beyond the screen edges, and only then fade while transients briefly reverse orbital direction.
 - **Terrain** — a dense, logarithmically balanced FFT history becomes a square 3D spectrum mesh sized to 90% of the viewport's shorter edge. It rotates at half speed, periodically decelerates to a full stop, and reverses direction at randomized intervals.
 - **Prism** — the time-domain waveform becomes a layered chromatic field.
-- **Overlap** — light-gray squares drift and pulse with the music while their intersections reveal new color fields.
+- **Overlap** — outlined figures drift and pulse with the music, their backgrounds independently fade between black and dark gray over 10–18 seconds, and their intersections reveal new color fields. Every randomized 2–3 minute interval, the figures slowly morph between squares and circles.
 
 Once microphone input is active, the interface fades into an immersive visual-only state. Move the pointer to the right edge to reveal sensitivity and color controls, or to the bottom edge to reveal visualization types. Color presets include Original, Dark, Colorful, Random, and Vibrant, and affect only the visualization elements—not the neutral background.
 

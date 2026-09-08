@@ -33,6 +33,14 @@ let terrainDirection = 1;
 let terrainVelocity = .0045;
 let terrainTargetVelocity = .0045;
 let terrainNextTurnFrame = null;
+let overlapShape = {
+  value: 0,
+  from: 0,
+  target: 0,
+  started: 0,
+  duration: 0,
+  nextAt: performance.now() + 120000 + Math.random() * 60000,
+};
 
 const TERRAIN_COLUMNS = 72;
 const TERRAIN_ROWS = 44;
@@ -246,9 +254,12 @@ function drawPrism(w, h, b) {
 
 function createSquares(w, h) {
   const count = w < 700 ? 9 : 14;
+  const now = performance.now();
   squares = Array.from({ length: count }, (_, index) => {
     const size = 74 + ((index * 47) % 128);
     const angle = index * 2.399;
+    const shade = Math.random() * 34;
+    const fadeDuration = 10000 + Math.random() * 8000;
     return {
       x: w * (.18 + ((index * .173) % .64)),
       y: h * (.14 + ((index * .277) % .72)),
@@ -257,6 +268,11 @@ function createSquares(w, h) {
       vy: Math.sin(angle) * (.14 + (index % 3) * .05),
       phase: index * .73,
       hue: 185 + index * 27,
+      shade,
+      shadeFrom: shade,
+      shadeTarget: Math.random() < .3 ? 0 : 7 + Math.random() * 29,
+      fadeStarted: now - Math.random() * fadeDuration,
+      fadeDuration,
     };
   });
 }
@@ -265,7 +281,33 @@ function drawOverlap(w, h, b) {
   if (!squares.length) createSquares(w, h);
   const pulse = 1 + b.low * .42 + Math.max(0, b.level - .18) * .3;
   const speed = 1 + b.mid * 1.8;
+  const now = performance.now();
+  if (now >= overlapShape.nextAt) {
+    overlapShape.from = overlapShape.value;
+    overlapShape.target = overlapShape.target === 0 ? 1 : 0;
+    overlapShape.started = now;
+    overlapShape.duration = 8000 + Math.random() * 7000;
+    overlapShape.nextAt = Infinity;
+  }
+  if (overlapShape.started) {
+    const morphProgress = Math.min(1, (now - overlapShape.started) / overlapShape.duration);
+    const easedMorph = .5 - Math.cos(morphProgress * Math.PI) / 2;
+    overlapShape.value = overlapShape.from + (overlapShape.target - overlapShape.from) * easedMorph;
+    if (morphProgress >= 1) {
+      overlapShape.started = 0;
+      overlapShape.nextAt = now + 120000 + Math.random() * 60000;
+    }
+  }
   const boxes = squares.map((square) => {
+    let fadeProgress = Math.min(1, (now - square.fadeStarted) / square.fadeDuration);
+    const easedFade = .5 - Math.cos(fadeProgress * Math.PI) / 2;
+    square.shade = square.shadeFrom + (square.shadeTarget - square.shadeFrom) * easedFade;
+    if (fadeProgress >= 1) {
+      square.shadeFrom = square.shade;
+      square.shadeTarget = Math.random() < .3 ? 0 : 7 + Math.random() * 29;
+      square.fadeStarted = now;
+      square.fadeDuration = 10000 + Math.random() * 8000;
+    }
     square.x += square.vx * speed;
     square.y += square.vy * speed;
     const size = square.size * (pulse + Math.sin(frame * .018 + square.phase) * .025);
@@ -277,12 +319,18 @@ function drawOverlap(w, h, b) {
     return { ...square, size, left: square.x - half, top: square.y - half, right: square.x + half, bottom: square.y + half };
   });
 
+  const shapePath = (box) => {
+    ctx.beginPath();
+    ctx.roundRect(box.left, box.top, box.size, box.size, box.size * .5 * overlapShape.value);
+  };
+
   boxes.forEach((box) => {
-    ctx.fillStyle = `rgba(215, 215, 222, ${.035 + b.level * .035})`;
+    ctx.fillStyle = `rgb(${box.shade}, ${box.shade}, ${box.shade + 2})`;
     ctx.strokeStyle = `rgba(225, 225, 232, ${.18 + b.high * .25})`;
     ctx.lineWidth = 1;
-    ctx.fillRect(box.left, box.top, box.size, box.size);
-    ctx.strokeRect(box.left, box.top, box.size, box.size);
+    shapePath(box);
+    ctx.fill();
+    ctx.stroke();
   });
 
   ctx.globalCompositeOperation = 'screen';
@@ -293,8 +341,13 @@ function drawOverlap(w, h, b) {
       const right = Math.min(boxes[i].right, boxes[j].right);
       const bottom = Math.min(boxes[i].bottom, boxes[j].bottom);
       if (right <= left || bottom <= top) continue;
+      ctx.save();
+      shapePath(boxes[i]);
+      ctx.clip();
+      shapePath(boxes[j]);
       ctx.fillStyle = color((boxes[i].hue + boxes[j].hue) / 2 + b.high * 80, 88, 58 + b.level * 20, .22 + b.low * .28);
-      ctx.fillRect(left, top, right - left, bottom - top);
+      ctx.fill();
+      ctx.restore();
     }
   }
   ctx.globalCompositeOperation = 'source-over';
