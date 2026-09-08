@@ -1002,16 +1002,17 @@ function drawEqualizer(w, h, b) {
   });
 
   const titlePulse = 1 + Math.min(.065, b.low * .055);
+  ctx.globalCompositeOperation = 'source-over';
   ctx.save();
   ctx.translate(cx, cy);
   ctx.scale(titlePulse, titlePulse);
   ctx.font = `${fontSize}px 'Russo One', sans-serif`;
-  ctx.fillStyle = color(280 + b.mid * 55, 36, 92, .96);
-  ctx.strokeStyle = 'rgba(0, 0, 0, .94)';
-  ctx.lineWidth = Math.max(2.5, fontSize * .055);
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#050507';
+  ctx.lineWidth = Math.max(3, fontSize * .06);
   ctx.lineJoin = 'round';
-  ctx.shadowColor = 'rgba(0, 0, 0, .92)';
-  ctx.shadowBlur = 16 + b.low * 18;
+  ctx.shadowColor = '#000';
+  ctx.shadowBlur = 22 + b.low * 18;
   ctx.strokeText(equalizerText, 0, 0);
   ctx.fillText(equalizerText, 0, 0);
   ctx.restore();
