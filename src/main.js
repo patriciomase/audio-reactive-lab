@@ -34,9 +34,10 @@ let terrainVelocity = .0045;
 let terrainTargetVelocity = .0045;
 let terrainNextTurnFrame = null;
 let overlapShape = {
-  value: 0,
-  from: 0,
-  target: 0,
+  current: 'square',
+  from: 'square',
+  target: 'square',
+  progress: 1,
   started: 0,
   duration: 0,
   nextAt: performance.now() + 120000 + Math.random() * 60000,
@@ -284,6 +285,8 @@ function createSquares(w, h) {
       frequencyPosition: (index + .5) / count,
       energy: 0,
       response: .34 + ((index * 29) % 24) / 100,
+      rotation: Math.random() * Math.PI * 2,
+      spin: (.0012 + Math.random() * .0032) * (index % 2 ? -1 : 1),
       shade,
       shadeFrom: shade,
       shadeTarget: Math.random() < .3 ? 0 : 7 + Math.random() * 29,
@@ -298,17 +301,21 @@ function drawOverlap(w, h, b) {
   const speed = 1 + b.mid * 1.8;
   const now = performance.now();
   if (now >= overlapShape.nextAt) {
-    overlapShape.from = overlapShape.value;
-    overlapShape.target = overlapShape.target === 0 ? 1 : 0;
+    const shapes = ['square', 'circle', 'triangle'].filter((shape) => shape !== overlapShape.current);
+    overlapShape.from = overlapShape.current;
+    overlapShape.target = shapes[Math.floor(Math.random() * shapes.length)];
     overlapShape.started = now;
-    overlapShape.duration = 8000 + Math.random() * 7000;
+    overlapShape.duration = 1000;
+    overlapShape.progress = 0;
     overlapShape.nextAt = Infinity;
   }
   if (overlapShape.started) {
     const morphProgress = Math.min(1, (now - overlapShape.started) / overlapShape.duration);
-    const easedMorph = .5 - Math.cos(morphProgress * Math.PI) / 2;
-    overlapShape.value = overlapShape.from + (overlapShape.target - overlapShape.from) * easedMorph;
+    overlapShape.progress = .5 - Math.cos(morphProgress * Math.PI) / 2;
     if (morphProgress >= 1) {
+      overlapShape.current = overlapShape.target;
+      overlapShape.from = overlapShape.current;
+      overlapShape.progress = 1;
       overlapShape.started = 0;
       overlapShape.nextAt = now + 120000 + Math.random() * 60000;
     }
@@ -342,6 +349,7 @@ function drawOverlap(w, h, b) {
     }
     square.x += square.vx * speed;
     square.y += square.vy * speed;
+    if (overlapShape.from === 'triangle' || overlapShape.target === 'triangle') square.rotation += square.spin;
     const size = square.size * (1 + square.energy * square.response + Math.sin(frame * .012 + square.phase) * .012);
     const half = size / 2;
     if (square.x - half < -10 || square.x + half > w + 10) square.vx *= -1;
@@ -351,9 +359,44 @@ function drawOverlap(w, h, b) {
     return { ...square, size, left: square.x - half, top: square.y - half, right: square.x + half, bottom: square.y + half };
   });
 
+  const boundaryPoint = (shape, t) => {
+    const angle = t * Math.PI * 2 - Math.PI / 2;
+    if (shape === 'circle') return { x: Math.cos(angle), y: Math.sin(angle) };
+    if (shape === 'square') {
+      const scale = 1 / Math.max(Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle)));
+      return { x: Math.cos(angle) * scale, y: Math.sin(angle) * scale };
+    }
+    const vertices = [{ x: 0, y: -1 }, { x: .866, y: .5 }, { x: -.866, y: .5 }];
+    const segment = t * 3;
+    const index = Math.min(2, Math.floor(segment));
+    const local = segment - index;
+    const start = vertices[index];
+    const end = vertices[(index + 1) % 3];
+    return { x: start.x + (end.x - start.x) * local, y: start.y + (end.y - start.y) * local };
+  };
+
   const shapePath = (box) => {
     ctx.beginPath();
-    ctx.roundRect(box.left, box.top, box.size, box.size, box.size * .5 * overlapShape.value);
+    const radius = box.size / 2;
+    const triangleAmount = (overlapShape.from === 'triangle' ? 1 - overlapShape.progress : 0)
+      + (overlapShape.target === 'triangle' ? overlapShape.progress : 0);
+    for (let pointIndex = 0; pointIndex <= 48; pointIndex += 1) {
+      const t = (pointIndex % 48) / 48;
+      const from = boundaryPoint(overlapShape.from, t);
+      const to = boundaryPoint(overlapShape.target, t);
+      let x = from.x + (to.x - from.x) * overlapShape.progress;
+      let y = from.y + (to.y - from.y) * overlapShape.progress;
+      if (triangleAmount > 0) {
+        const angle = box.rotation * triangleAmount;
+        const rotatedX = x * Math.cos(angle) - y * Math.sin(angle);
+        y = x * Math.sin(angle) + y * Math.cos(angle);
+        x = rotatedX;
+      }
+      const screenX = box.x + x * radius;
+      const screenY = box.y + y * radius;
+      if (pointIndex === 0) ctx.moveTo(screenX, screenY); else ctx.lineTo(screenX, screenY);
+    }
+    ctx.closePath();
   };
 
   boxes.forEach((box) => {
