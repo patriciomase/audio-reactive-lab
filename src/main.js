@@ -69,14 +69,11 @@ function color(hue, saturation, lightness, alpha = 1) {
   return `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
 }
 
-function drawBackground(w, h, b) {
+function drawBackground(w, h) {
   const gradient = ctx.createRadialGradient(w * .5, h * .48, 0, w * .5, h * .48, Math.max(w, h) * .75);
-  const center = colorMode === 'original'
-    ? `rgba(${20 + b.low * 40}, ${10 + b.mid * 30}, ${38 + b.high * 70}, 1)`
-    : color(250 + b.high * 90, colorMode === 'dark' ? 18 : 58, colorMode === 'dark' ? 10 : 14 + b.level * 12);
-  gradient.addColorStop(0, center);
-  gradient.addColorStop(.5, '#080812');
-  gradient.addColorStop(1, '#030305');
+  gradient.addColorStop(0, '#111118');
+  gradient.addColorStop(.48, '#08080d');
+  gradient.addColorStop(1, '#020204');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, w, h);
 }
@@ -124,16 +121,17 @@ function drawOrbit(w, h, b) {
   }
 
   ctx.globalCompositeOperation = 'lighter';
-  const viewportRadius = Math.hypot(w, h) * .62;
-  reverbWaves = reverbWaves.filter((wave) => wave.maxRadius * wave.scale < viewportRadius && wave.alpha > .006);
+  const viewportRadius = Math.hypot(w, h) * .78;
+  reverbWaves = reverbWaves.filter((wave) => wave.maxRadius * wave.scale < viewportRadius);
   reverbWaves.forEach((wave) => {
     wave.scale += wave.speed;
     wave.speed *= 1.002;
-    wave.alpha *= .996;
+    const progress = wave.maxRadius * wave.scale / viewportRadius;
+    const edgeFade = progress < .72 ? 1 : Math.max(0, 1 - (progress - .72) / .28);
     wave.points.forEach((point) => {
       ctx.beginPath();
-      ctx.fillStyle = color(point.hue, 90, point.lightness, point.alpha * wave.alpha);
-      ctx.arc(cx + point.x * wave.scale, cy + point.y * wave.scale, Math.max(.6, point.size * (.55 + wave.alpha * .35)), 0, Math.PI * 2);
+      ctx.fillStyle = color(point.hue, 90, point.lightness, point.alpha * wave.alpha * edgeFade);
+      ctx.arc(cx + point.x * wave.scale, cy + point.y * wave.scale, Math.max(.6, point.size * (.55 + wave.alpha * edgeFade * .35)), 0, Math.PI * 2);
       ctx.fill();
     });
   });
@@ -216,7 +214,7 @@ function drawPrism(w, h, b) {
 function draw() {
   frame += 1;
   const b = bands();
-  drawBackground(innerWidth, innerHeight, b);
+  drawBackground(innerWidth, innerHeight);
   if (mode === 'orbit') drawOrbit(innerWidth, innerHeight, b);
   if (mode === 'terrain') drawTerrain(innerWidth, innerHeight, b);
   if (mode === 'prism') drawPrism(innerWidth, innerHeight, b);
