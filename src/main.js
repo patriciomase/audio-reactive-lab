@@ -954,14 +954,11 @@ function drawEqualizer(w, h, b) {
     const fill = color(hue, 90, 58 + energy * 20, alpha);
 
     ctx.fillStyle = fill;
-    ctx.shadowColor = color(hue, 100, 65, .55);
-    ctx.shadowBlur = 5 + energy * 15;
     ctx.fillRect(cx + xOffset, cy - height, barWidth, height - 2);
     ctx.fillRect(cx - xOffset - barWidth, cy - height, barWidth, height - 2);
     ctx.fillRect(cx + xOffset, cy + 2, barWidth, height);
     ctx.fillRect(cx - xOffset - barWidth, cy + 2, barWidth, height);
   }
-  ctx.shadowBlur = 0;
   ctx.globalCompositeOperation = 'source-over';
 
   equalizerLowAverage += (b.low - equalizerLowAverage) * .028;
@@ -980,7 +977,7 @@ function drawEqualizer(w, h, b) {
       alpha: .48,
       hue: 190 + Math.random() * 150,
     });
-    equalizerTextLayers = equalizerTextLayers.slice(-12);
+    equalizerTextLayers = equalizerTextLayers.slice(-6);
     equalizerLastBeat = frame;
   }
   equalizerPreviousLow = b.low;
