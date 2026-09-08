@@ -14,10 +14,11 @@ const autoTransitionInput = document.querySelector('#auto-transition');
 const autoTransitionState = document.querySelector('.auto-state');
 const transitionTimeInput = document.querySelector('#transition-time');
 const transitionTimeValue = document.querySelector('.transition-value');
+const equalizerTextInput = document.querySelector('#equalizer-text');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel', 'trace']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel', 'trace', 'equalizer']);
 const validColorModes = new Set([...colorModeInput.options].map((option) => option.value));
 let savedSettings = {};
 try {
@@ -36,6 +37,8 @@ let transitionTime = Number.isFinite(Number(savedSettings.transitionTime))
   ? Math.max(Number(transitionTimeInput.min), Math.min(Number(transitionTimeInput.max), Number(savedSettings.transitionTime)))
   : Number(transitionTimeInput.value);
 let carouselTimer = null;
+let equalizerText = typeof savedSettings.equalizerText === 'string' && savedSettings.equalizerText.trim()
+  ? savedSettings.equalizerText.slice(0, 24) : 'DJ PATO';
 sensitivityInput.value = sensitivity;
 sensitivityValue.textContent = sensitivity.toFixed(1);
 colorModeInput.value = colorMode;
@@ -43,6 +46,7 @@ autoTransitionInput.checked = autoTransition;
 autoTransitionState.textContent = autoTransition ? 'ON' : 'OFF';
 transitionTimeInput.value = transitionTime;
 transitionTimeValue.textContent = transitionTime;
+equalizerTextInput.value = equalizerText;
 let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
@@ -74,6 +78,11 @@ let tracePreviousLow = 0;
 let traceLowAverage = .12;
 let traceLastBeat = -100;
 let traceLastAttempt = -100;
+let equalizerEnergies = [];
+let equalizerTextLayers = [];
+let equalizerPreviousLow = 0;
+let equalizerLowAverage = .12;
+let equalizerLastBeat = -100;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -100,10 +109,11 @@ traceVideo.muted = true;
 traceVideo.playsInline = true;
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
+app.classList.toggle('equalizer-mode', mode === 'equalizer');
 
 function saveSettings() {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode, autoTransition, transitionTime }));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode, autoTransition, transitionTime, equalizerText }));
   } catch {
     // The visualizer still works when storage is disabled or unavailable.
   }
@@ -905,6 +915,109 @@ function drawTrace(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+function drawEqualizer(w, h, b) {
+  const cx = w * .5;
+  const cy = h * .5;
+  const barCount = w < 700 ? 24 : 38;
+  const centerGap = Math.min(210, Math.max(92, w * .16));
+  const usableWidth = Math.max(120, (w - centerGap) * .5 - 26);
+  const gap = Math.max(2, Math.min(7, usableWidth / barCount * .24));
+  const barWidth = Math.max(2, usableWidth / barCount - gap);
+  const maxHeight = Math.max(32, h * .42 - 28);
+
+  if (equalizerEnergies.length !== barCount) equalizerEnergies = Array(barCount).fill(0);
+
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < barCount; i += 1) {
+    const position = i / Math.max(1, barCount - 1);
+    let raw;
+    if (audio) {
+      const bin = Math.min(audio.frequency.length - 1, Math.floor(2 + Math.pow(position, 1.72) * 230));
+      const radius = 2 + Math.floor(position * 4);
+      raw = average(audio.frequency, Math.max(1, bin - radius), bin + radius + 1) * sensitivity;
+    } else {
+      const wave = Math.sin(frame * (.045 + position * .025) + i * .83) * .5 + .5;
+      const pulse = Math.max(0, Math.sin(frame * .052 - i * .19));
+      raw = (.07 + wave * .18 + pulse * .12) * (.78 + b.level);
+    }
+
+    // The outside bands are deliberately more excitable than the center bands.
+    const sideBoost = .62 + position * 1.48;
+    const target = Math.min(1.25, raw * sideBoost);
+    const easing = target > equalizerEnergies[i] ? .38 : .105;
+    equalizerEnergies[i] += (target - equalizerEnergies[i]) * easing;
+    const energy = equalizerEnergies[i];
+    const height = Math.max(2, energy * maxHeight);
+    const xOffset = centerGap * .5 + i * (barWidth + gap);
+    const hue = 272 - position * 205 + b.high * 42;
+    const alpha = .46 + Math.min(.48, energy * .75);
+    const fill = color(hue, 90, 58 + energy * 20, alpha);
+
+    ctx.fillStyle = fill;
+    ctx.shadowColor = color(hue, 100, 65, .55);
+    ctx.shadowBlur = 5 + energy * 15;
+    ctx.fillRect(cx + xOffset, cy - height, barWidth, height - 2);
+    ctx.fillRect(cx - xOffset - barWidth, cy - height, barWidth, height - 2);
+    ctx.fillRect(cx + xOffset, cy + 2, barWidth, height);
+    ctx.fillRect(cx - xOffset - barWidth, cy + 2, barWidth, height);
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation = 'source-over';
+
+  equalizerLowAverage += (b.low - equalizerLowAverage) * .028;
+  const beat = b.low > Math.max(.17, equalizerLowAverage * 1.28)
+    && b.low - equalizerPreviousLow > .012
+    && frame - equalizerLastBeat > 16;
+  if (beat) {
+    equalizerTextLayers.push({
+      text: equalizerText,
+      x: (Math.random() * 2 - 1) * w * .018,
+      y: (Math.random() * 2 - 1) * h * .012,
+      vx: (Math.random() * 2 - 1) * .16,
+      vy: -.06 - Math.random() * .16,
+      scale: 1,
+      growth: .0015 + Math.random() * .002,
+      alpha: .48,
+      hue: 190 + Math.random() * 150,
+    });
+    equalizerTextLayers = equalizerTextLayers.slice(-12);
+    equalizerLastBeat = frame;
+  }
+  equalizerPreviousLow = b.low;
+
+  const fontSize = Math.min(h * .13, w / Math.max(7, equalizerText.length * .69));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.globalCompositeOperation = 'lighter';
+  equalizerTextLayers = equalizerTextLayers.filter((layer) => layer.alpha > .012);
+  equalizerTextLayers.forEach((layer) => {
+    layer.x += layer.vx;
+    layer.y += layer.vy;
+    layer.scale += layer.growth;
+    layer.alpha *= .986;
+    ctx.save();
+    ctx.translate(cx + layer.x, cy + layer.y);
+    ctx.scale(layer.scale, layer.scale);
+    ctx.font = `${fontSize}px 'Russo One', sans-serif`;
+    ctx.fillStyle = color(layer.hue, 92, 64, layer.alpha);
+    ctx.fillText(layer.text, 0, 0);
+    ctx.restore();
+  });
+
+  const titlePulse = 1 + Math.min(.065, b.low * .055);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(titlePulse, titlePulse);
+  ctx.font = `${fontSize}px 'Russo One', sans-serif`;
+  ctx.fillStyle = color(280 + b.mid * 55, 36, 92, .96);
+  ctx.shadowColor = color(265, 92, 68, .78);
+  ctx.shadowBlur = 10 + b.low * 28;
+  ctx.fillText(equalizerText, 0, 0);
+  ctx.restore();
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 function draw() {
   frame += 1;
   const b = bands();
@@ -917,6 +1030,7 @@ function draw() {
   if (mode === 'tangle') drawTangle(innerWidth, innerHeight, b);
   if (mode === 'tunnel') drawTunnel(innerWidth, innerHeight, b);
   if (mode === 'trace') drawTrace(innerWidth, innerHeight, b);
+  if (mode === 'equalizer') drawEqualizer(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
 }
 
@@ -1015,6 +1129,10 @@ transitionTimeInput.addEventListener('input', () => {
   saveSettings();
   scheduleCarousel();
 });
+equalizerTextInput.addEventListener('input', () => {
+  equalizerText = equalizerTextInput.value.slice(0, 24).toUpperCase();
+  saveSettings();
+});
 modeButtons.forEach((button) => button.addEventListener('click', async (event) => {
   const previousMode = mode;
   mode = button.dataset.mode;
@@ -1023,8 +1141,10 @@ modeButtons.forEach((button) => button.addEventListener('click', async (event) =
   universeRipples = [];
   tunnelHistory = [];
   tunnelGrid = [];
+  equalizerTextLayers = [];
   if (previousMode === 'trace' && mode !== 'trace') traceLayers = [];
   modeButtons.forEach((item) => item.classList.toggle('active', item === button));
+  app.classList.toggle('equalizer-mode', mode === 'equalizer');
   const url = new URL(location.href);
   url.searchParams.set('mode', mode);
   history.replaceState({}, '', url);
