@@ -12,7 +12,7 @@ const sensitivityValue = document.querySelector('.meter b');
 const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
-const validModes = new Set(['orbit', 'terrain', 'prism']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap']);
 const requestedMode = new URLSearchParams(location.search).get('mode');
 let mode = validModes.has(requestedMode) ? requestedMode : 'orbit';
 let sensitivity = Number(sensitivityInput.value);
@@ -27,6 +27,7 @@ let orbitAngle = 0;
 let orbitDirection = 1;
 let reverseUntil = 0;
 let lastWaveFrame = -100;
+let squares = [];
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
 
@@ -211,6 +212,62 @@ function drawPrism(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+function createSquares(w, h) {
+  const count = w < 700 ? 9 : 14;
+  squares = Array.from({ length: count }, (_, index) => {
+    const size = 74 + ((index * 47) % 128);
+    const angle = index * 2.399;
+    return {
+      x: w * (.18 + ((index * .173) % .64)),
+      y: h * (.14 + ((index * .277) % .72)),
+      size,
+      vx: Math.cos(angle) * (.14 + (index % 4) * .045),
+      vy: Math.sin(angle) * (.14 + (index % 3) * .05),
+      phase: index * .73,
+      hue: 185 + index * 27,
+    };
+  });
+}
+
+function drawOverlap(w, h, b) {
+  if (!squares.length) createSquares(w, h);
+  const pulse = 1 + b.low * .42 + Math.max(0, b.level - .18) * .3;
+  const speed = 1 + b.mid * 1.8;
+  const boxes = squares.map((square) => {
+    square.x += square.vx * speed;
+    square.y += square.vy * speed;
+    const size = square.size * (pulse + Math.sin(frame * .018 + square.phase) * .025);
+    const half = size / 2;
+    if (square.x - half < -10 || square.x + half > w + 10) square.vx *= -1;
+    if (square.y - half < -10 || square.y + half > h + 10) square.vy *= -1;
+    square.x = Math.max(-10 + half, Math.min(w + 10 - half, square.x));
+    square.y = Math.max(-10 + half, Math.min(h + 10 - half, square.y));
+    return { ...square, size, left: square.x - half, top: square.y - half, right: square.x + half, bottom: square.y + half };
+  });
+
+  boxes.forEach((box) => {
+    ctx.fillStyle = `rgba(215, 215, 222, ${.035 + b.level * .035})`;
+    ctx.strokeStyle = `rgba(225, 225, 232, ${.18 + b.high * .25})`;
+    ctx.lineWidth = 1;
+    ctx.fillRect(box.left, box.top, box.size, box.size);
+    ctx.strokeRect(box.left, box.top, box.size, box.size);
+  });
+
+  ctx.globalCompositeOperation = 'screen';
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      const left = Math.max(boxes[i].left, boxes[j].left);
+      const top = Math.max(boxes[i].top, boxes[j].top);
+      const right = Math.min(boxes[i].right, boxes[j].right);
+      const bottom = Math.min(boxes[i].bottom, boxes[j].bottom);
+      if (right <= left || bottom <= top) continue;
+      ctx.fillStyle = color((boxes[i].hue + boxes[j].hue) / 2 + b.high * 80, 88, 58 + b.level * 20, .22 + b.low * .28);
+      ctx.fillRect(left, top, right - left, bottom - top);
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 function draw() {
   frame += 1;
   const b = bands();
@@ -218,6 +275,7 @@ function draw() {
   if (mode === 'orbit') drawOrbit(innerWidth, innerHeight, b);
   if (mode === 'terrain') drawTerrain(innerWidth, innerHeight, b);
   if (mode === 'prism') drawPrism(innerWidth, innerHeight, b);
+  if (mode === 'overlap') drawOverlap(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
 }
 
@@ -273,6 +331,7 @@ modeButtons.forEach((button) => button.addEventListener('click', () => {
   history.replaceState({}, '', url);
 }));
 window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { squares = []; });
 window.addEventListener('pointermove', (event) => {
   app.classList.toggle('show-modes', Boolean(audio) && event.clientY > innerHeight - 96);
 });

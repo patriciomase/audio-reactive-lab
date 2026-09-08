@@ -27,7 +27,7 @@ h1 { margin: 0 0 30px; font-size: clamp(48px, 7vw, 112px); font-weight: 300; let
 .meter select { width: 100%; cursor: pointer; color: #f5f2ff; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.17); border-radius: 8px; padding: 9px 10px; font: 10px DM Mono, monospace; letter-spacing: .06em; outline: none; }
 .meter select:focus { border-color: rgba(255,255,255,.45); }
 nav { position: fixed; z-index: 3; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 5px; display: flex; gap: 3px; border: 1px solid rgba(255,255,255,.13); border-radius: 14px; background: rgba(12,11,17,.64); backdrop-filter: blur(20px); box-shadow: 0 15px 50px rgba(0,0,0,.45); transition: opacity .9s ease, transform .9s ease; }
-nav button { cursor: pointer; border: 0; border-radius: 9px; color: #777481; background: transparent; min-width: 104px; padding: 10px 15px; font-size: 12px; transition: .2s; } nav button span { margin-right: 10px; font: 9px DM Mono, monospace; opacity: .6; } nav button.active { color: white; background: rgba(255,255,255,.1); } nav button:hover { color: white; }
+nav button { cursor: pointer; border: 0; border-radius: 9px; color: #777481; background: transparent; min-width: 96px; padding: 10px 13px; font-size: 12px; transition: .2s; } nav button span { margin-right: 9px; font: 9px DM Mono, monospace; opacity: .6; } nav button.active { color: white; background: rgba(255,255,255,.1); } nav button:hover { color: white; }
 .immersive header { opacity: 0; transform: translateY(-12px); pointer-events: none; }
 .immersive .intro { opacity: 0; transform: translateY(-50%); pointer-events: none; }
 .immersive nav { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
