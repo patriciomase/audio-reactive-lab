@@ -35,6 +35,14 @@
             <option value="vibrant">Vibrant</option>
           </select>
         </div>
+        <div class="setting toggle-setting">
+          <label for="auto-transition">AUTO TRANSITION <b class="auto-state">OFF</b></label>
+          <input id="auto-transition" type="checkbox" />
+        </div>
+        <div class="setting">
+          <label for="transition-time">TRANSITION TIME <b><span class="transition-value">30</span>S</b></label>
+          <input id="transition-time" type="range" min="10" max="180" step="5" value="30" />
+        </div>
       </aside>
       <nav aria-label="Visual modes">
         <button data-mode="orbit" class="active"><span>01</span>Orbit</button>

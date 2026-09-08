@@ -10,6 +10,10 @@ const error = document.querySelector('.error');
 const sensitivityInput = document.querySelector('#sensitivity');
 const sensitivityValue = document.querySelector('.meter b');
 const colorModeInput = document.querySelector('#color-mode');
+const autoTransitionInput = document.querySelector('#auto-transition');
+const autoTransitionState = document.querySelector('.auto-state');
+const transitionTimeInput = document.querySelector('#transition-time');
+const transitionTimeValue = document.querySelector('.transition-value');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
@@ -27,9 +31,18 @@ let sensitivity = Number.isFinite(Number(savedSettings.sensitivity))
   ? Math.max(Number(sensitivityInput.min), Math.min(Number(sensitivityInput.max), Number(savedSettings.sensitivity)))
   : Number(sensitivityInput.value);
 let colorMode = validColorModes.has(savedSettings.colorMode) ? savedSettings.colorMode : colorModeInput.value;
+let autoTransition = savedSettings.autoTransition === true;
+let transitionTime = Number.isFinite(Number(savedSettings.transitionTime))
+  ? Math.max(Number(transitionTimeInput.min), Math.min(Number(transitionTimeInput.max), Number(savedSettings.transitionTime)))
+  : Number(transitionTimeInput.value);
+let carouselTimer = null;
 sensitivityInput.value = sensitivity;
 sensitivityValue.textContent = sensitivity.toFixed(1);
 colorModeInput.value = colorMode;
+autoTransitionInput.checked = autoTransition;
+autoTransitionState.textContent = autoTransition ? 'ON' : 'OFF';
+transitionTimeInput.value = transitionTime;
+transitionTimeValue.textContent = transitionTime;
 let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
@@ -89,7 +102,7 @@ modeButtons.forEach((button) => button.classList.toggle('active', button.dataset
 
 function saveSettings() {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode }));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode, autoTransition, transitionTime }));
   } catch {
     // The visualizer still works when storage is disabled or unavailable.
   }
@@ -98,6 +111,16 @@ function saveSettings() {
 function updateListenLabel() {
   if (audio) return;
   listenButton.innerHTML = `${mode === 'trace' ? 'Enable mic + camera' : 'Enable microphone'} <span>↗</span>`;
+}
+
+function scheduleCarousel() {
+  clearTimeout(carouselTimer);
+  if (!autoTransition) return;
+  carouselTimer = setTimeout(() => {
+    const availableModes = modeButtons.filter((button) => button.dataset.mode !== 'trace' || audio?.hasCamera);
+    const currentIndex = availableModes.findIndex((button) => button.dataset.mode === mode);
+    availableModes[(currentIndex + 1 + availableModes.length) % availableModes.length].click();
+  }, transitionTime * 1000);
 }
 
 updateListenLabel();
@@ -953,7 +976,20 @@ colorModeInput.addEventListener('change', () => {
   saveSettings();
   window.umami?.track('color-changed', { color: colorMode });
 });
-modeButtons.forEach((button) => button.addEventListener('click', async () => {
+autoTransitionInput.addEventListener('change', () => {
+  autoTransition = autoTransitionInput.checked;
+  autoTransitionState.textContent = autoTransition ? 'ON' : 'OFF';
+  if (!autoTransition && mode !== 'trace') disableTraceCamera();
+  saveSettings();
+  scheduleCarousel();
+});
+transitionTimeInput.addEventListener('input', () => {
+  transitionTime = Number(transitionTimeInput.value);
+  transitionTimeValue.textContent = transitionTime;
+  saveSettings();
+  scheduleCarousel();
+});
+modeButtons.forEach((button) => button.addEventListener('click', async (event) => {
   mode = button.dataset.mode;
   spectrumHistory = [];
   reverbWaves = [];
@@ -967,7 +1003,8 @@ modeButtons.forEach((button) => button.addEventListener('click', async () => {
   saveSettings();
   if (!audio) updateListenLabel();
   else if (mode === 'trace' && !audio.hasCamera) await enableTraceCamera();
-  else if (mode !== 'trace') disableTraceCamera();
+  else if (mode !== 'trace' && (!autoTransition || event.isTrusted)) disableTraceCamera();
+  scheduleCarousel();
   window.umami?.track('visualization-changed', { visualization: mode });
 }));
 window.addEventListener('resize', resize);
@@ -979,3 +1016,4 @@ document.documentElement.addEventListener('mouseleave', () => app.classList.remo
 window.addEventListener('pagehide', () => audio && stopAudio());
 resize();
 draw();
+scheduleCarousel();
