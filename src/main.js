@@ -87,7 +87,7 @@ function drawOrbit(w, h, b) {
   if (transient) reverseUntil = frame + 34;
   const targetDirection = frame < reverseUntil ? -1 : 1;
   orbitDirection += (targetDirection - orbitDirection) * (targetDirection < 0 ? .24 : .1);
-  orbitAngle += .008 * orbitDirection;
+  orbitAngle += .0064 * orbitDirection;
   previousLow = b.low;
 
   const points = [];
@@ -103,7 +103,7 @@ function drawOrbit(w, h, b) {
       points.push({
         x: x - cx,
         y: y - cy,
-        size: 1.2 + energy * 4.5,
+        size: .9 + ring * .18 + (Math.sin(i * 2.37 + ring) + 1) * .16 + energy * 4.1,
         hue: 255 + ring * 24 + b.high * 80,
         lightness: 65 + energy * 20,
         alpha: .24 + energy * .62,
@@ -116,7 +116,7 @@ function drawOrbit(w, h, b) {
     reverbWaves.push({
       points: points.map((point) => ({ ...point })),
       scale: 1.02,
-      speed: .011 + b.low * .009,
+      speed: .0073 + b.low * .006,
       alpha: Math.min(.78, .52 + b.level * .5),
       maxRadius: 310 + b.low * 65,
     });
@@ -128,8 +128,8 @@ function drawOrbit(w, h, b) {
   reverbWaves = reverbWaves.filter((wave) => wave.maxRadius * wave.scale < viewportRadius && wave.alpha > .006);
   reverbWaves.forEach((wave) => {
     wave.scale += wave.speed;
-    wave.speed *= 1.003;
-    wave.alpha *= .994;
+    wave.speed *= 1.002;
+    wave.alpha *= .996;
     wave.points.forEach((point) => {
       ctx.beginPath();
       ctx.fillStyle = color(point.hue, 90, point.lightness, point.alpha * wave.alpha);
@@ -153,9 +153,9 @@ function drawTerrain(w, h, b) {
   }
   spectrumHistory.unshift(sample);
   spectrumHistory = spectrumHistory.slice(0, 30);
-  const yaw = Math.sin(frame * .006) * .34 + (b.mid - .2) * .22;
-  const pitch = .9 + Math.sin(frame * .004) * .08;
-  const roll = Math.sin(frame * .008) * .035 + b.high * .05;
+  const yaw = frame * .009;
+  const pitch = .82 + b.low * .08;
+  const roll = b.high * .025;
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
   const cosX = Math.cos(pitch), sinX = Math.sin(pitch);
   const cosZ = Math.cos(roll), sinZ = Math.sin(roll);
@@ -171,19 +171,29 @@ function drawTerrain(w, h, b) {
     return { x: w / 2 + x3 * scale, y: h * .56 + y3 * scale };
   };
 
-  ctx.lineWidth = 1.2;
-  spectrumHistory.forEach((row, z) => {
+  const side = Math.min(w, h) * .9;
+  const grid = spectrumHistory.map((row, z) => row.map((value, i) => project(
+    (i / (row.length - 1) - .5) * side,
+    -value * side * (.32 + b.low * .12),
+    (z / 29 - .5) * side,
+  )));
+
+  ctx.lineWidth = 1.05;
+  grid.forEach((row, z) => {
     ctx.beginPath();
-    row.forEach((value, i) => {
-      const x = (i / (row.length - 1) - .5) * w * .9;
-      const depth = (z / 29 - .5) * h * .9;
-      const height = -value * h * (.28 + b.low * .12);
-      const point = project(x, height, depth);
-      if (i === 0) ctx.moveTo(point.x, point.y); else ctx.lineTo(point.x, point.y);
-    });
-    ctx.strokeStyle = color(190 + z * 4 + b.high * 80, 90, 64, .85 - z / 38);
+    row.forEach((point, i) => i === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+    ctx.strokeStyle = color(190 + z * 4 + b.high * 80, 90, 64, .82 - z / 45);
     ctx.stroke();
   });
+  for (let column = 0; column < 48; column += 3) {
+    ctx.beginPath();
+    grid.forEach((row, z) => {
+      const point = row[column];
+      if (z === 0) ctx.moveTo(point.x, point.y); else ctx.lineTo(point.x, point.y);
+    });
+    ctx.strokeStyle = color(225 + column * 2 + b.high * 70, 84, 60, .24);
+    ctx.stroke();
+  }
 }
 
 function drawPrism(w, h, b) {
@@ -243,7 +253,7 @@ function stopAudio() {
   statusText.textContent = 'DEMO SIGNAL';
   listenButton.classList.remove('secondary');
   listenButton.innerHTML = 'Enable microphone <span>↗</span>';
-  app.classList.remove('immersive');
+  app.classList.remove('immersive', 'show-modes');
 }
 
 listenButton.addEventListener('click', () => audio ? stopAudio() : startAudio());
@@ -265,6 +275,10 @@ modeButtons.forEach((button) => button.addEventListener('click', () => {
   history.replaceState({}, '', url);
 }));
 window.addEventListener('resize', resize);
+window.addEventListener('pointermove', (event) => {
+  app.classList.toggle('show-modes', Boolean(audio) && event.clientY > innerHeight - 96);
+});
+document.documentElement.addEventListener('mouseleave', () => app.classList.remove('show-modes'));
 window.addEventListener('pagehide', () => audio && stopAudio());
 resize();
 draw();

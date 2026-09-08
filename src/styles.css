@@ -31,6 +31,7 @@ nav button { cursor: pointer; border: 0; border-radius: 9px; color: #777481; bac
 .immersive header { opacity: 0; transform: translateY(-12px); pointer-events: none; }
 .immersive .intro { opacity: 0; transform: translateY(-50%); pointer-events: none; }
 .immersive nav { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
+.immersive.show-modes nav { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .immersive .meter { opacity: 0; transform: translate(22px, -50%); }
 .immersive .meter:hover, .immersive .meter:focus-within { opacity: 1; transform: translate(0, -50%); }
 @keyframes pulse { 50% { opacity: .35; } }
