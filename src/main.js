@@ -12,7 +12,7 @@ const sensitivityValue = document.querySelector('.meter b');
 const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'dancers', 'universe', 'tangle']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle']);
 const requestedMode = new URLSearchParams(location.search).get('mode');
 let mode = validModes.has(requestedMode) ? requestedMode : 'orbit';
 let sensitivity = Number(sensitivityInput.value);
@@ -49,19 +49,6 @@ let overlapShape = {
 
 const TERRAIN_COLUMNS = 72;
 const TERRAIN_ROWS = 44;
-const dancerMask = document.createElement('canvas');
-const dancerOutline = document.createElement('canvas');
-const dancerMaskCtx = dancerMask.getContext('2d');
-const dancerOutlineCtx = dancerOutline.getContext('2d');
-dancerMask.width = dancerOutline.width = 220;
-dancerMask.height = dancerOutline.height = 340;
-
-const dancers = Array.from({ length: 7 }, (_, index) => ({
-  x: .1 + index * .135,
-  depth: .58 + ((index * 37) % 42) / 100,
-  phase: index * .91,
-  hue: 180 + index * 31,
-}));
 const universeStars = Array.from({ length: 340 }, () => ({
   x: Math.random() * 2 - 1,
   y: Math.random() * 2 - 1,
@@ -544,99 +531,6 @@ function drawOverlap(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawLimb(context, points, width) {
-  context.beginPath();
-  context.moveTo(points[0].x, points[0].y);
-  for (let i = 1; i < points.length; i += 1) context.lineTo(points[i].x, points[i].y);
-  context.lineWidth = width;
-  context.lineCap = 'round';
-  context.lineJoin = 'round';
-  context.stroke();
-}
-
-function renderDancer(phase, b, strokeColor, style) {
-  dancerMaskCtx.clearRect(0, 0, dancerMask.width, dancerMask.height);
-  dancerMaskCtx.fillStyle = '#fff';
-  dancerMaskCtx.strokeStyle = '#fff';
-
-  const groove = Math.sin(phase);
-  const counterGroove = Math.sin(phase + Math.PI / 2);
-  const beat = Math.pow(Math.max(0, Math.sin(phase * 2)), 2);
-  const bounce = -beat * (4 + b.low * 9);
-  const sway = groove * (8 + b.mid * 8);
-  const pelvis = { x: 110 + sway * .42, y: 205 + bounce };
-  const chest = { x: 110 - sway * .28, y: 130 + bounce * .62 };
-  const neck = { x: chest.x - sway * .08, y: chest.y - 27 };
-  const shoulderL = { x: chest.x - 27, y: chest.y + 2 };
-  const shoulderR = { x: chest.x + 27, y: chest.y - 2 };
-  const hipL = { x: pelvis.x - 18, y: pelvis.y };
-  const hipR = { x: pelvis.x + 18, y: pelvis.y };
-
-  dancerMaskCtx.beginPath();
-  dancerMaskCtx.moveTo(chest.x - 31, chest.y - 4);
-  dancerMaskCtx.bezierCurveTo(chest.x - 27, chest.y + 22, pelvis.x - 16, pelvis.y - 40, pelvis.x - 22, pelvis.y - 5);
-  dancerMaskCtx.quadraticCurveTo(pelvis.x, pelvis.y + 12, pelvis.x + 22, pelvis.y - 5);
-  dancerMaskCtx.bezierCurveTo(pelvis.x + 16, pelvis.y - 40, chest.x + 27, chest.y + 22, chest.x + 31, chest.y - 4);
-  dancerMaskCtx.quadraticCurveTo(chest.x, chest.y - 17, chest.x - 31, chest.y - 4);
-  dancerMaskCtx.fill();
-  dancerMaskCtx.beginPath();
-  dancerMaskCtx.roundRect(neck.x - 7, neck.y - 5, 14, 31, 6);
-  dancerMaskCtx.fill();
-  const gestures = [
-    [{ x: 54 + groove * 8, y: 54 - b.high * 12 }, { x: 177, y: 142 + counterGroove * 20 }],
-    [{ x: 48, y: 125 + groove * 24 }, { x: 172, y: 76 - counterGroove * 18 }],
-    [{ x: 68 + groove * 12, y: 82 }, { x: 153 + counterGroove * 15, y: 82 + groove * 15 }],
-  ][style % 3];
-  const handL = gestures[0];
-  const handR = gestures[1];
-  const elbowL = { x: (shoulderL.x + handL.x) / 2 - 14, y: (shoulderL.y + handL.y) / 2 + 5 };
-  const elbowR = { x: (shoulderR.x + handR.x) / 2 + 14, y: (shoulderR.y + handR.y) / 2 + 5 };
-  drawLimb(dancerMaskCtx, [shoulderL, elbowL, handL], 17);
-  drawLimb(dancerMaskCtx, [shoulderR, elbowR, handR], 17);
-
-  // The feet stay planted most of the time; shifting the knees and pelvis sells
-  // weight transfer without making the figure look airborne or distressed.
-  const step = style % 2 ? counterGroove : groove;
-  const footL = { x: 72 - Math.max(0, -step) * (8 + b.low * 8), y: 318 - Math.max(0, step) * b.low * 7 };
-  const footR = { x: 148 + Math.max(0, step) * (8 + b.low * 8), y: 318 - Math.max(0, -step) * b.low * 7 };
-  const kneeL = { x: 86 + sway * .22 - step * 6, y: 260 + Math.abs(step) * 5 };
-  const kneeR = { x: 134 + sway * .22 - step * 6, y: 260 + Math.abs(step) * 5 };
-  drawLimb(dancerMaskCtx, [hipL, kneeL, footL], 22);
-  drawLimb(dancerMaskCtx, [hipR, kneeR, footR], 22);
-
-  dancerMaskCtx.beginPath();
-  dancerMaskCtx.ellipse(neck.x, neck.y - 25, 17, 21, sway * .004, 0, Math.PI * 2);
-  dancerMaskCtx.fill();
-
-  dancerOutlineCtx.clearRect(0, 0, dancerOutline.width, dancerOutline.height);
-  const outlineWidth = 3.5 + b.high * 4;
-  for (let direction = 0; direction < 12; direction += 1) {
-    const angle = direction / 12 * Math.PI * 2;
-    dancerOutlineCtx.drawImage(dancerMask, Math.cos(angle) * outlineWidth, Math.sin(angle) * outlineWidth);
-  }
-  dancerOutlineCtx.globalCompositeOperation = 'destination-out';
-  dancerOutlineCtx.drawImage(dancerMask, 0, 0);
-  dancerOutlineCtx.globalCompositeOperation = 'source-in';
-  dancerOutlineCtx.fillStyle = strokeColor;
-  dancerOutlineCtx.fillRect(0, 0, dancerOutline.width, dancerOutline.height);
-  dancerOutlineCtx.globalCompositeOperation = 'source-over';
-}
-
-function drawDancers(w, h, b) {
-  const tempo = frame * (.007 + b.mid * .006);
-  const floor = h * .92;
-  const activeDancers = dancers.slice(0, w < 600 ? 4 : dancers.length);
-  ctx.globalCompositeOperation = 'lighter';
-  activeDancers.forEach((dancer, index) => {
-    const scale = dancer.depth * Math.min(1, h / 690, w / 1050);
-    const phase = tempo + dancer.phase * .72;
-    const x = w * ((index + .5) / activeDancers.length) + Math.sin(phase * .5 + index) * (4 + b.mid * 7);
-    renderDancer(phase, b, color(dancer.hue + frame * .025, 88, 68, .68 + b.level * .3), index);
-    ctx.drawImage(dancerOutline, x - dancerOutline.width * scale / 2, floor - dancerOutline.height * scale, dancerOutline.width * scale, dancerOutline.height * scale);
-  });
-  ctx.globalCompositeOperation = 'source-over';
-}
-
 function drawStarfield(w, h, b, intensity = 1) {
   const cx = w * .5;
   const cy = h * .48;
@@ -733,7 +627,6 @@ function draw() {
   if (mode === 'terrain') drawTerrain(innerWidth, innerHeight, b);
   if (mode === 'prism') drawPrism(innerWidth, innerHeight, b);
   if (mode === 'overlap') drawOverlap(innerWidth, innerHeight, b);
-  if (mode === 'dancers') drawDancers(innerWidth, innerHeight, b);
   if (mode === 'universe') drawUniverse(innerWidth, innerHeight, b);
   if (mode === 'tangle') drawTangle(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);

@@ -10,7 +10,6 @@ Which visual direction feels worth developing into a customizable audiovisual in
 - **Terrain** — a dense, logarithmically balanced FFT history becomes a square 3D spectrum mesh sized to 90% of the viewport's shorter edge. It rotates at half speed, periodically decelerates to a full stop, and reverses direction at randomized intervals.
 - **Prism** — the time-domain waveform becomes a layered chromatic field.
 - **Overlap** — outlined figures drift and pulse with the music, their backgrounds independently fade between black and dark gray over 10–18 seconds, and their intersections reveal new color fields. Every randomized 2–3 minute interval, the figures slowly morph between squares and circles.
-- **Dancers** — an ensemble of faceless, hollow human contours performs procedural contemporary movement; bass drives weight and stomps, mids drive tempo and arms, and treble drives outline energy and delayed motion traces.
 - **Universe** — a deep-space flight through layered stars and a four-armed galaxy; bass bends the core and releases gravitational ripples, mids turn the galaxy, and treble accelerates the starfield.
 - **Tangle** — frequency-mapped dots bounce independently while remaining a single closed loop; self-crossing interior facets accumulate into colored regions, bass deepens the fill, and treble energizes the connections.
 
