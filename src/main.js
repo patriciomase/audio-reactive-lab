@@ -64,6 +64,11 @@ let terrainDirection = 1;
 let terrainVelocity = .0045;
 let terrainTargetVelocity = .0045;
 let terrainNextTurnFrame = null;
+let universeAngle = 0;
+let universeVelocity = .00052;
+let universePreviousLow = 0;
+let universeReverseUntil = 0;
+let universeLastGlitch = -600;
 let tangleDots = [];
 let tunnelHistory = [];
 let tunnelGrid = [];
@@ -743,7 +748,18 @@ function drawUniverse(w, h, b) {
   drawStarfield(w, h, b, .62, false);
 
   ctx.globalCompositeOperation = 'lighter';
-  const galaxyRotation = frame * .00052;
+  const transient = b.low > .3 && b.low - universePreviousLow > .025;
+  const demoGlitch = !audio && frame - universeLastGlitch > 720;
+  if ((transient && frame - universeLastGlitch > 260 && Math.random() < .34) || demoGlitch) {
+    universeReverseUntil = frame + 18 + Math.floor(Math.random() * 18);
+    universeLastGlitch = frame;
+  }
+  const forwardSpeed = .00028 + Math.min(1, b.mid) * .00105 + Math.min(1, b.high) * .00042;
+  const targetVelocity = frame < universeReverseUntil ? -forwardSpeed * 1.85 : forwardSpeed;
+  universeVelocity += (targetVelocity - universeVelocity) * (frame < universeReverseUntil ? .28 : .055);
+  universeAngle += universeVelocity;
+  universePreviousLow = b.low;
+  const galaxyRotation = universeAngle;
   const galaxyRadius = Math.max(shortEdge * .85, Math.max(w, h) * .68);
   for (let index = 0; index < 1800; index += 1) {
     const band = index % 3 === 0 ? b.low : index % 3 === 1 ? b.mid : b.high;
@@ -758,7 +774,8 @@ function drawUniverse(w, h, b) {
     const flicker = Math.pow(Math.max(0, Math.sin(frame * .035 + index * 2.417)), 14);
     const highlight = Math.min(1, flicker * band * 1.7);
     ctx.beginPath();
-    ctx.fillStyle = color(25 + arm * 34 + distance * 110, 82, 58 + dust * 26 + highlight * 8, .055 + dust * .25 + highlight * .32);
+    const armAlpha = Math.min(1, (.055 + dust * .25 + highlight * .32) * 1.5);
+    ctx.fillStyle = color(25 + arm * 34 + distance * 110, 82, 58 + dust * 26 + highlight * 8, armAlpha);
     ctx.arc(x, y, .26 + dust * 1.08 + highlight * 1.45, 0, Math.PI * 2);
     ctx.fill();
   }
