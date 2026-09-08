@@ -1007,8 +1007,12 @@ function drawEqualizer(w, h, b) {
   ctx.scale(titlePulse, titlePulse);
   ctx.font = `${fontSize}px 'Russo One', sans-serif`;
   ctx.fillStyle = color(280 + b.mid * 55, 36, 92, .96);
-  ctx.shadowColor = color(265, 92, 68, .78);
-  ctx.shadowBlur = 10 + b.low * 28;
+  ctx.strokeStyle = 'rgba(0, 0, 0, .94)';
+  ctx.lineWidth = Math.max(2.5, fontSize * .055);
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(0, 0, 0, .92)';
+  ctx.shadowBlur = 16 + b.low * 18;
+  ctx.strokeText(equalizerText, 0, 0);
   ctx.fillText(equalizerText, 0, 0);
   ctx.restore();
   ctx.shadowBlur = 0;
