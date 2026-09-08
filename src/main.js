@@ -37,8 +37,9 @@ let transitionTime = Number.isFinite(Number(savedSettings.transitionTime))
   ? Math.max(Number(transitionTimeInput.min), Math.min(Number(transitionTimeInput.max), Number(savedSettings.transitionTime)))
   : Number(transitionTimeInput.value);
 let carouselTimer = null;
-let equalizerText = typeof savedSettings.equalizerText === 'string' && savedSettings.equalizerText.trim()
-  ? savedSettings.equalizerText.slice(0, 24) : 'DJ PATO';
+let equalizerText = typeof savedSettings.equalizerText === 'string'
+  ? savedSettings.equalizerText.slice(0, 24) : 'LIVE';
+if (equalizerText === 'DJ PATO') equalizerText = 'LIVE';
 sensitivityInput.value = sensitivity;
 sensitivityValue.textContent = sensitivity.toFixed(1);
 colorModeInput.value = colorMode;
