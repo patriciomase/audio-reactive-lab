@@ -98,6 +98,7 @@ let glyphLowAverage = .12;
 let glyphLastBeat = -100;
 let glyphColorWaves = [];
 let glyphNextWave = 0;
+let glyphLastColorWave = -100;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -1036,7 +1037,14 @@ function drawEqualizer(w, h, b) {
 
 const GLYPH_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+=<>?/\\[]{}:;~^';
 
-function resetGlyphCanvas(w = innerWidth, h = innerHeight) {
+function resetGlyphCanvas(w = innerWidth, h = innerHeight, preserve = false) {
+  const oldWidth = glyphCanvas.width;
+  const previous = preserve && oldWidth ? document.createElement('canvas') : null;
+  if (previous) {
+    previous.width = glyphCanvas.width;
+    previous.height = glyphCanvas.height;
+    previous.getContext('2d').drawImage(glyphCanvas, 0, 0);
+  }
   const scale = Math.min(1, 1920 / Math.max(1, w));
   glyphCanvas.width = Math.max(1, Math.round(w * scale));
   glyphCanvas.height = Math.max(1, Math.round(h * scale));
@@ -1045,8 +1053,19 @@ function resetGlyphCanvas(w = innerWidth, h = innerHeight) {
   glyphColumns = Math.max(16, Math.min(80, Math.floor(glyphCanvas.width / 24)));
   glyphCell = glyphCanvas.width / glyphColumns;
   glyphRows = Math.ceil(glyphCanvas.height / glyphCell);
-  glyphColorWaves = [];
-  glyphNextWave = frame + 18;
+  if (previous) {
+    glyphCtx.drawImage(previous, 0, 0, glyphCanvas.width, glyphCanvas.height);
+    const resizeScale = glyphCanvas.width / oldWidth;
+    glyphColorWaves.forEach((wave) => {
+      wave.x *= resizeScale;
+      wave.y *= resizeScale;
+      wave.radius *= resizeScale;
+      wave.speed *= resizeScale;
+    });
+  } else {
+    glyphColorWaves = [];
+    glyphNextWave = frame + 36;
+  }
   glyphCtx.textAlign = 'center';
   glyphCtx.textBaseline = 'middle';
 }
@@ -1078,11 +1097,12 @@ function launchGlyphColorWave(b) {
     speed: glyphCell * (.38 + Math.min(1, b.level) * .62),
   });
   glyphColorWaves = glyphColorWaves.slice(-7);
+  glyphLastColorWave = frame;
 }
 
 function drawGlyph(w, h, b) {
   if (!glyphCanvas.width || Math.abs(glyphCanvas.width / glyphCanvas.height - w / h) > .01) {
-    resetGlyphCanvas(w, h);
+    resetGlyphCanvas(w, h, true);
   }
 
   glyphCtx.save();
@@ -1099,7 +1119,7 @@ function drawGlyph(w, h, b) {
   if (beat) {
     const screenScale = glyphColumns * glyphRows / (80 * 45);
     writeGlyphs(Math.max(18, Math.floor((65 + Math.min(1, b.level) * 260) * screenScale)), b, .38);
-    launchGlyphColorWave(b);
+    if (frame - glyphLastColorWave > 36) launchGlyphColorWave(b);
     glyphLastBeat = frame;
   } else if (Math.random() < .12 + Math.min(.25, b.level * .2)) {
     const screenScale = glyphColumns * glyphRows / (80 * 45);
@@ -1108,8 +1128,8 @@ function drawGlyph(w, h, b) {
   glyphPreviousLow = b.low;
 
   if (frame >= glyphNextWave && (!audio || b.level > .075)) {
-    launchGlyphColorWave(b);
-    glyphNextWave = frame + Math.max(18, 42 - Math.floor(Math.min(1, b.level) * 28));
+    if (frame - glyphLastColorWave > 36) launchGlyphColorWave(b);
+    glyphNextWave = frame + Math.max(42, 68 - Math.floor(Math.min(1, b.level) * 25));
   }
 
   glyphWaveCtx.clearRect(0, 0, glyphWaveCanvas.width, glyphWaveCanvas.height);
@@ -1297,7 +1317,7 @@ modeButtons.forEach((button) => button.addEventListener('click', async (event) =
   window.umami?.track('visualization-changed', { visualization: mode });
 }));
 window.addEventListener('resize', resize);
-window.addEventListener('resize', () => { squares = []; tangleDots = []; resetGlyphCanvas(); });
+window.addEventListener('resize', () => { squares = []; tangleDots = []; resetGlyphCanvas(innerWidth, innerHeight, true); });
 window.addEventListener('pointermove', (event) => {
   app.classList.toggle('show-modes', Boolean(audio) && event.clientY > innerHeight - 96);
 });
