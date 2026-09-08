@@ -281,6 +281,9 @@ function createSquares(w, h) {
       vy: Math.sin(angle) * (.14 + (index % 3) * .05),
       phase: index * .73,
       hue: 185 + index * 27,
+      frequencyPosition: (index + .5) / count,
+      energy: 0,
+      response: .34 + ((index * 29) % 24) / 100,
       shade,
       shadeFrom: shade,
       shadeTarget: Math.random() < .3 ? 0 : 7 + Math.random() * 29,
@@ -292,7 +295,6 @@ function createSquares(w, h) {
 
 function drawOverlap(w, h, b) {
   if (!squares.length) createSquares(w, h);
-  const pulse = 1 + b.low * .42 + Math.max(0, b.level - .18) * .3;
   const speed = 1 + b.mid * 1.8;
   const now = performance.now();
   if (now >= overlapShape.nextAt) {
@@ -312,6 +314,23 @@ function drawOverlap(w, h, b) {
     }
   }
   const boxes = squares.map((square) => {
+    let frequencyEnergy;
+    if (audio) {
+      // Spread the figures logarithmically across the audible spectrum. A small
+      // neighbourhood keeps individual bins from flickering without making the
+      // whole group move as one again.
+      const minFrequency = 45;
+      const maxFrequency = Math.min(15000, audio.context.sampleRate / 2);
+      const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, square.frequencyPosition);
+      const centreBin = frequency / (audio.context.sampleRate / audio.analyser.fftSize);
+      const radius = 2 + Math.round(square.frequencyPosition * 5);
+      frequencyEnergy = average(audio.frequency, Math.max(1, Math.round(centreBin) - radius), Math.round(centreBin) + radius + 1)
+        * sensitivity * (.78 + square.frequencyPosition * .72);
+    } else {
+      const demoRate = .011 + square.frequencyPosition * .035;
+      frequencyEnergy = .08 + Math.max(0, Math.sin(frame * demoRate + square.phase * 2.7)) * .28;
+    }
+    square.energy += (Math.min(1.35, frequencyEnergy) - square.energy) * (frequencyEnergy > square.energy ? .2 : .065);
     let fadeProgress = Math.min(1, (now - square.fadeStarted) / square.fadeDuration);
     const easedFade = .5 - Math.cos(fadeProgress * Math.PI) / 2;
     square.shade = square.shadeFrom + (square.shadeTarget - square.shadeFrom) * easedFade;
@@ -323,7 +342,7 @@ function drawOverlap(w, h, b) {
     }
     square.x += square.vx * speed;
     square.y += square.vy * speed;
-    const size = square.size * (pulse + Math.sin(frame * .018 + square.phase) * .025);
+    const size = square.size * (1 + square.energy * square.response + Math.sin(frame * .012 + square.phase) * .012);
     const half = size / 2;
     if (square.x - half < -10 || square.x + half > w + 10) square.vx *= -1;
     if (square.y - half < -10 || square.y + half > h + 10) square.vy *= -1;
@@ -339,8 +358,8 @@ function drawOverlap(w, h, b) {
 
   boxes.forEach((box) => {
     ctx.fillStyle = `rgb(${box.shade}, ${box.shade}, ${box.shade + 2})`;
-    ctx.strokeStyle = `rgba(225, 225, 232, ${.18 + b.high * .25})`;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(225, 225, 232, ${.14 + box.energy * .48})`;
+    ctx.lineWidth = 1 + box.energy * 1.2;
     shapePath(box);
     ctx.fill();
     ctx.stroke();
@@ -358,7 +377,8 @@ function drawOverlap(w, h, b) {
       shapePath(boxes[i]);
       ctx.clip();
       shapePath(boxes[j]);
-      ctx.fillStyle = color((boxes[i].hue + boxes[j].hue) / 2 + b.high * 80, 88, 58 + b.level * 20, .22 + b.low * .28);
+      const sharedEnergy = (boxes[i].energy + boxes[j].energy) / 2;
+      ctx.fillStyle = color((boxes[i].hue + boxes[j].hue) / 2 + sharedEnergy * 90, 88, 58 + sharedEnergy * 18, .2 + sharedEnergy * .42);
       ctx.fill();
       ctx.restore();
     }
