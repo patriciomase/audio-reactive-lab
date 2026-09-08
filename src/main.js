@@ -9,12 +9,15 @@ const statusText = status.querySelector('span');
 const error = document.querySelector('.error');
 const sensitivityInput = document.querySelector('#sensitivity');
 const sensitivityValue = document.querySelector('.meter b');
+const colorModeInput = document.querySelector('#color-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
 const validModes = new Set(['orbit', 'terrain', 'prism']);
 const requestedMode = new URLSearchParams(location.search).get('mode');
 let mode = validModes.has(requestedMode) ? requestedMode : 'orbit';
 let sensitivity = Number(sensitivityInput.value);
+let colorMode = colorModeInput.value;
+let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
 let spectrumHistory = [];
@@ -52,9 +55,20 @@ function bands() {
   return { low, mid, high, level: (low + mid + high) / 3 };
 }
 
+function color(hue, saturation, lightness, alpha = 1) {
+  if (colorMode === 'dark') return `hsla(${220 + hue * .03}, ${Math.min(saturation, 24)}%, ${Math.min(lightness, 28)}%, ${alpha * .72})`;
+  if (colorMode === 'colorful') return `hsla(${(hue + frame * .18) % 360}, ${Math.max(saturation, 82)}%, ${Math.max(lightness, 58)}%, ${alpha})`;
+  if (colorMode === 'random') return `hsla(${(randomHue + hue * .42) % 360}, ${Math.max(saturation, 68)}%, ${lightness}%, ${alpha})`;
+  if (colorMode === 'vibrant') return `hsla(${(hue * 1.7 + 30) % 360}, 100%, ${Math.max(lightness, 62)}%, ${Math.min(1, alpha * 1.18)})`;
+  return `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+}
+
 function drawBackground(w, h, b) {
   const gradient = ctx.createRadialGradient(w * .5, h * .48, 0, w * .5, h * .48, Math.max(w, h) * .75);
-  gradient.addColorStop(0, `rgba(${20 + b.low * 40}, ${10 + b.mid * 30}, ${38 + b.high * 70}, 1)`);
+  const center = colorMode === 'original'
+    ? `rgba(${20 + b.low * 40}, ${10 + b.mid * 30}, ${38 + b.high * 70}, 1)`
+    : color(250 + b.high * 90, colorMode === 'dark' ? 18 : 58, colorMode === 'dark' ? 10 : 14 + b.level * 12);
+  gradient.addColorStop(0, center);
   gradient.addColorStop(.5, '#080812');
   gradient.addColorStop(1, '#030305');
   ctx.fillStyle = gradient;
@@ -74,7 +88,7 @@ function drawOrbit(w, h, b) {
       const x = cx + Math.cos(a) * (radius + wobble);
       const y = cy + Math.sin(a) * (radius + wobble) * .72;
       ctx.beginPath();
-      ctx.fillStyle = `hsla(${255 + ring * 24 + b.high * 80}, 90%, ${65 + energy * 20}%, ${.24 + energy * .62})`;
+      ctx.fillStyle = color(255 + ring * 24 + b.high * 80, 90, 65 + energy * 20, .24 + energy * .62);
       ctx.arc(x, y, 1.2 + energy * 4.5, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -99,7 +113,7 @@ function drawTerrain(w, h, b) {
       const y = baseY - value * (170 + b.low * 100) * perspective;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = `hsla(${190 + z * 4 + b.high * 80}, 90%, 64%, ${.85 - z / 38})`;
+    ctx.strokeStyle = color(190 + z * 4 + b.high * 80, 90, 64, .85 - z / 38);
     ctx.stroke();
   });
 }
@@ -114,7 +128,7 @@ function drawPrism(w, h, b) {
       const y = h / 2 + live * (110 + b.level * 260) + Math.sin(x * .006 + layer + frame * .008) * (24 + b.mid * 50);
       if (x === 0) ctx.moveTo(x, y + layer * 3); else ctx.lineTo(x, y + layer * 3);
     }
-    ctx.strokeStyle = `hsla(${180 + layer * 22 + frame * .15}, 95%, 66%, ${.12 + b.level * .3})`;
+    ctx.strokeStyle = color(180 + layer * 22 + frame * .15, 95, 66, .12 + b.level * .3);
     ctx.lineWidth = 1 + b.high * 3;
     ctx.stroke();
   }
@@ -168,6 +182,10 @@ listenButton.addEventListener('click', () => audio ? stopAudio() : startAudio())
 sensitivityInput.addEventListener('input', () => {
   sensitivity = Number(sensitivityInput.value);
   sensitivityValue.textContent = sensitivity.toFixed(1);
+});
+colorModeInput.addEventListener('change', () => {
+  colorMode = colorModeInput.value;
+  if (colorMode === 'random') randomHue = Math.random() * 360;
 });
 modeButtons.forEach((button) => button.addEventListener('click', () => {
   mode = button.dataset.mode;

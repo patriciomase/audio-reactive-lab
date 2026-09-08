@@ -20,8 +20,20 @@
         <div class="error" hidden></div>
       </section>
       <aside class="meter" aria-label="Sensitivity control">
-        <label for="sensitivity">SENSITIVITY <b>1.4</b></label>
-        <input id="sensitivity" type="range" min="0.5" max="2.5" step="0.1" value="1.4" />
+        <div class="setting">
+          <label for="sensitivity">SENSITIVITY <b>1.4</b></label>
+          <input id="sensitivity" type="range" min="0.5" max="2.5" step="0.1" value="1.4" />
+        </div>
+        <div class="setting">
+          <label for="color-mode">COLOR</label>
+          <select id="color-mode">
+            <option value="original">Original</option>
+            <option value="dark">Dark</option>
+            <option value="colorful">Colorful</option>
+            <option value="random">Random</option>
+            <option value="vibrant">Vibrant</option>
+          </select>
+        </div>
       </aside>
       <nav aria-label="Visual modes">
         <button data-mode="orbit" class="active"><span>01</span>Orbit</button>
