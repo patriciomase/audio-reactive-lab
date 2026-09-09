@@ -20,7 +20,6 @@ const sensitivityInput = document.querySelector('#sensitivity');
 const sensitivityValue = document.querySelector('.meter b');
 const colorModeInput = document.querySelector('#color-mode');
 const autoTransitionInput = document.querySelector('#auto-transition');
-const autoTransitionState = document.querySelector('.auto-state');
 const transitionTimeInput = document.querySelector('#transition-time');
 const transitionTimeValue = document.querySelector('.transition-value');
 const equalizerTextInput = document.querySelector('#equalizer-text');
@@ -56,7 +55,6 @@ sensitivityInput.value = sensitivity;
 sensitivityValue.textContent = sensitivity.toFixed(1);
 colorModeInput.value = colorMode;
 autoTransitionInput.checked = autoTransition;
-autoTransitionState.textContent = autoTransition ? 'ON' : 'OFF';
 transitionTimeInput.value = transitionTime;
 transitionTimeValue.textContent = transitionTime;
 equalizerTextInput.value = equalizerText;
@@ -1236,7 +1234,6 @@ colorModeInput.addEventListener('change', () => {
 });
 autoTransitionInput.addEventListener('change', () => {
   autoTransition = autoTransitionInput.checked;
-  autoTransitionState.textContent = autoTransition ? 'ON' : 'OFF';
   if (!autoTransition && mode !== 'trace') disableTraceCamera();
   saveSettings();
   scheduleCarousel();
