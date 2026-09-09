@@ -34,6 +34,8 @@ Extra media required only by the active visualization, such as Trace camera inpu
 
 Failure to acquire temporary media does not end the listening session.
 
+Trace reads frames from a stable video adapter but does not own camera permission, playback, tracks, or stream teardown.
+
 ### Global setting
 
 A setting shared across visualizations, such as sensitivity, color mode, carousel state, or transition interval. Storage and migrations are centralized.

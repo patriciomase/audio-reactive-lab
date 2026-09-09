@@ -4,6 +4,7 @@ import { createAudioFrameSampler } from './audio/audio-frame.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { createVisualizationPlayer } from './runtime/visualization-player.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
+import { createTraceVisualization } from './visualizations/trace.js';
 
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
@@ -82,11 +83,6 @@ const tunnelRotation = { x: .48, y: -.32, z: .12 };
 const tunnelVelocity = { x: .0018, y: -.0013, z: .0011 };
 const tunnelTargetVelocity = { ...tunnelVelocity };
 let tunnelNextDirection = 0;
-let traceLayers = [];
-let tracePreviousLow = 0;
-let traceLowAverage = .12;
-let traceLastBeat = -100;
-let traceLastAttempt = -100;
 let equalizerEnergies = [];
 let equalizerTextLayers = [];
 let equalizerPreviousLow = 0;
@@ -125,8 +121,6 @@ const universeStars = Array.from({ length: 340 }, () => ({
   hue: 185 + Math.random() * 110,
 }));
 const traceVideo = document.createElement('video');
-const traceCapture = document.createElement('canvas');
-const traceCaptureCtx = traceCapture.getContext('2d', { willReadFrequently: true });
 traceVideo.muted = true;
 traceVideo.playsInline = true;
 
@@ -772,120 +766,6 @@ function traceRgb(hue) {
   return hslToRgb(hue, 88, 66);
 }
 
-function captureTrace(energy) {
-  if (traceVideo.readyState < 2 || !traceVideo.videoWidth) return;
-  const portrait = innerHeight > innerWidth;
-  const width = portrait ? 270 : 480;
-  const height = portrait ? 480 : 270;
-  traceCapture.width = width;
-  traceCapture.height = height;
-  const videoWidth = traceVideo.videoWidth;
-  const videoHeight = traceVideo.videoHeight;
-  const cropScale = Math.max(width / videoWidth, height / videoHeight);
-  const sourceWidth = width / cropScale;
-  const sourceHeight = height / cropScale;
-  const sourceX = (videoWidth - sourceWidth) / 2;
-  const sourceY = (videoHeight - sourceHeight) / 2;
-  traceCaptureCtx.save();
-  traceCaptureCtx.translate(width, 0);
-  traceCaptureCtx.scale(-1, 1);
-  traceCaptureCtx.drawImage(traceVideo, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
-  traceCaptureCtx.restore();
-
-  const source = traceCaptureCtx.getImageData(0, 0, width, height);
-  const grayscale = new Uint8Array(width * height);
-  for (let pixel = 0; pixel < grayscale.length; pixel += 1) {
-    const offset = pixel * 4;
-    grayscale[pixel] = source.data[offset] * .299 + source.data[offset + 1] * .587 + source.data[offset + 2] * .114;
-  }
-  const gradients = new Uint16Array(width * height);
-  let gradientTotal = 0;
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const pixel = y * width + x;
-      const horizontal = grayscale[pixel + 1] - grayscale[pixel - 1];
-      const vertical = grayscale[pixel + width] - grayscale[pixel - width];
-      const strength = Math.abs(horizontal) + Math.abs(vertical);
-      gradients[pixel] = strength;
-      gradientTotal += strength;
-    }
-  }
-  const outline = traceCaptureCtx.createImageData(width, height);
-  const hue = (190 + traceLayers.length * 37 + frame * .7) % 360;
-  const [red, green, blue] = traceRgb(hue);
-  const meanGradient = gradientTotal / ((width - 2) * (height - 2));
-  const threshold = Math.max(8, Math.min(34, meanGradient * 1.7 - Math.min(7, energy * 9)));
-  let edgePixels = 0;
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const pixel = y * width + x;
-      const horizontal = grayscale[pixel + 1] - grayscale[pixel - 1];
-      const vertical = grayscale[pixel + width] - grayscale[pixel - width];
-      const strength = gradients[pixel];
-      if (strength < threshold) continue;
-      const isHorizontalEdge = Math.abs(horizontal) >= Math.abs(vertical);
-      const before = gradients[pixel - (isHorizontalEdge ? 1 : width)];
-      const after = gradients[pixel + (isHorizontalEdge ? 1 : width)];
-      if (strength < before || strength < after) continue;
-      const offset = pixel * 4;
-      outline.data[offset] = red;
-      outline.data[offset + 1] = green;
-      outline.data[offset + 2] = blue;
-      outline.data[offset + 3] = Math.min(255, (strength - threshold) * 7);
-      edgePixels += 1;
-    }
-  }
-  if (edgePixels < width * height * .001) return false;
-  const layerCanvas = document.createElement('canvas');
-  layerCanvas.width = width;
-  layerCanvas.height = height;
-  layerCanvas.getContext('2d').putImageData(outline, 0, 0);
-  traceLayers.forEach((layer) => { layer.latest = false; });
-  traceLayers.push({
-    canvas: layerCanvas,
-    x: 0,
-    y: 0,
-    vx: (Math.random() * 2 - 1) * (.08 + energy * .12),
-    vy: (Math.random() * 2 - 1) * (.06 + energy * .09),
-    alpha: .92,
-    scale: 1,
-    growth: .00015 + Math.random() * .00028,
-    latest: true,
-  });
-  traceLayers = traceLayers.slice(-18);
-  return true;
-}
-
-function drawTrace(w, h, b) {
-  drawStarfield(w, h, b, .14);
-  traceLowAverage += (b.low - traceLowAverage) * .025;
-  const beat = b.low > Math.max(.18, traceLowAverage * 1.32)
-    && b.low - tracePreviousLow > .014
-    && frame - traceLastBeat > 18;
-  const needsRefresh = traceLayers.length === 0 || frame - traceLastBeat > 180;
-  if ((beat || needsRefresh) && frame - traceLastAttempt > 15) {
-    if (captureTrace(b.low)) traceLastBeat = frame;
-    traceLastAttempt = frame;
-  }
-  tracePreviousLow = b.low;
-
-  ctx.globalCompositeOperation = 'lighter';
-  traceLayers = traceLayers.filter((layer) => layer.latest || layer.alpha > .018);
-  traceLayers.forEach((layer) => {
-    layer.x += layer.vx;
-    layer.y += layer.vy;
-    layer.scale += layer.growth;
-    layer.alpha = layer.latest ? Math.max(.16, layer.alpha * .9965) : layer.alpha * .995;
-    const cover = Math.max(w / layer.canvas.width, h / layer.canvas.height) * layer.scale;
-    const drawWidth = layer.canvas.width * cover;
-    const drawHeight = layer.canvas.height * cover;
-    ctx.globalAlpha = layer.alpha;
-    ctx.drawImage(layer.canvas, (w - drawWidth) / 2 + layer.x, (h - drawHeight) / 2 + layer.y, drawWidth, drawHeight);
-  });
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
-}
-
 function drawEqualizer(w, h, b, audioFrame) {
   const cx = w * .5;
   const cy = h * .5;
@@ -1276,9 +1156,11 @@ const legacyFactories = {
     tunnelTargetVelocity.x = tunnelVelocity.x; tunnelTargetVelocity.y = tunnelVelocity.y; tunnelTargetVelocity.z = tunnelVelocity.z;
     tunnelNextDirection = 0;
   }),
-  trace: () => legacyActivation(drawTrace, { reset: () => {
-    traceLayers = []; tracePreviousLow = 0; traceLowAverage = .12; traceLastBeat = -100; traceLastAttempt = -100;
-  } }),
+  trace: () => createTraceVisualization({
+    video: traceVideo,
+    resolveRgb: ({ hue }) => traceRgb(hue),
+    paintBackdrop: ({ width, height, bands: currentBands }) => drawStarfield(width, height, currentBands, .14),
+  }),
   equalizer: () => legacyActivation(drawEqualizer, { reset: () => {
     equalizerEnergies = []; equalizerTextLayers = []; equalizerPreviousLow = 0; equalizerLowAverage = .12; equalizerLastBeat = -100;
   } }),
