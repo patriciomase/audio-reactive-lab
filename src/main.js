@@ -1,6 +1,7 @@
 import './styles.css';
 import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
+import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { createVisualizationRuntime } from './runtime/visualization-runtime.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 
@@ -59,7 +60,6 @@ equalizerTextInput.value = equalizerText;
 let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
-let spectrumHistory = [];
 let reverbWaves = [];
 let previousLow = 0;
 let orbitAngle = 0;
@@ -78,7 +78,6 @@ let universePreviousLow = 0;
 let universeReverseUntil = 0;
 let universeLastGlitch = -600;
 let tangleDots = [];
-let tunnelHistory = [];
 let tunnelGrid = [];
 const tunnelRotation = { x: .48, y: -.32, z: .12 };
 const tunnelVelocity = { x: .0018, y: -.0013, z: .0011 };
@@ -266,24 +265,7 @@ function drawOrbit(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawTerrain(w, h, b, audioFrame) {
-  const sample = [];
-  for (let i = 0; i < TERRAIN_COLUMNS; i += 1) {
-    const position = i / (TERRAIN_COLUMNS - 1);
-    if (audioFrame.isLive) {
-      const minFrequency = 45;
-      const maxFrequency = Math.min(14000, audioFrame.sampleRate / 2);
-      const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, position);
-      const bin = Math.min(audioFrame.spectrum.length - 1, Math.round(frequency / (audioFrame.sampleRate / audioFrame.fftSize)));
-      const balanced = Math.pow(audioFrame.spectrum[bin] / 255, .82) * (.68 + position * .52);
-      sample.push(balanced);
-    } else {
-      sample.push((Math.max(0, Math.sin(i * .29 + frame * .03)) * .13 + Math.max(0, Math.sin(i * .11 - frame * .018)) * .06) * (.8 + position * .2));
-    }
-  }
-  spectrumHistory.unshift(sample);
-  spectrumHistory = spectrumHistory.slice(0, TERRAIN_ROWS);
-
+function drawTerrain(w, h, b, spectrumHistory) {
   if (terrainNextTurnFrame === null) terrainNextTurnFrame = frame + 420 + Math.random() * 540;
   if (frame >= terrainNextTurnFrame && terrainTargetVelocity !== 0) {
     terrainTargetVelocity = 0;
@@ -316,7 +298,7 @@ function drawTerrain(w, h, b, audioFrame) {
   };
 
   const side = Math.min(w, h) * .9;
-  const grid = spectrumHistory.map((row, z) => row.map((value, i) => project(
+  const grid = spectrumHistory.map((row, z) => Array.from(row, (value, i) => project(
     (i / (row.length - 1) - .5) * side,
     -value * side * (.64 + b.low * .24),
     (z / (TERRAIN_ROWS - 1) - .5) * side,
@@ -340,23 +322,7 @@ function drawTerrain(w, h, b, audioFrame) {
   }
 }
 
-function drawTunnel(w, h, b, audioFrame) {
-  const sample = [];
-  for (let i = 0; i < TERRAIN_COLUMNS; i += 1) {
-    const position = i / (TERRAIN_COLUMNS - 1);
-    if (audioFrame.isLive) {
-      const minFrequency = 45;
-      const maxFrequency = Math.min(14000, audioFrame.sampleRate / 2);
-      const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, position);
-      const bin = Math.min(audioFrame.spectrum.length - 1, Math.round(frequency / (audioFrame.sampleRate / audioFrame.fftSize)));
-      sample.push(Math.pow(audioFrame.spectrum[bin] / 255, .82) * (.68 + position * .52));
-    } else {
-      sample.push((Math.max(0, Math.sin(i * .29 + frame * .03)) * .13 + Math.max(0, Math.sin(i * .11 - frame * .018)) * .06) * (.8 + position * .2));
-    }
-  }
-  tunnelHistory.unshift(sample);
-  tunnelHistory = tunnelHistory.slice(0, TERRAIN_ROWS);
-
+function drawTunnel(w, h, b, tunnelHistory) {
   if (frame >= tunnelNextDirection) {
     const randomVelocity = () => (Math.random() * 2 - 1) * (.0022 + Math.random() * .0018);
     tunnelTargetVelocity.x = randomVelocity();
@@ -1288,25 +1254,36 @@ function legacyActivation(drawVisualization, { reset = () => {}, resize: onResiz
   };
 }
 
+function spectrumHistoryActivation(drawVisualization, reset) {
+  reset();
+  const history = createSpectrumHistory({ columns: TERRAIN_COLUMNS, rows: TERRAIN_ROWS });
+  return {
+    render: ({ width, height, bands: currentBands, audioFrame }) => {
+      drawVisualization(width, height, currentBands, history.advance(audioFrame));
+    },
+    dispose: reset,
+  };
+}
+
 const legacyFactories = {
   orbit: () => legacyActivation(drawOrbit, { reset: () => {
     reverbWaves = []; previousLow = 0; orbitAngle = 0; orbitDirection = 1; reverseUntil = 0; lastWaveFrame = -100;
   } }),
-  terrain: () => legacyActivation(drawTerrain, { reset: () => {
-    spectrumHistory = []; terrainAngle = 0; terrainDirection = 1; terrainVelocity = .0045; terrainTargetVelocity = .0045; terrainNextTurnFrame = null;
-  } }),
+  terrain: () => spectrumHistoryActivation(drawTerrain, () => {
+    terrainAngle = 0; terrainDirection = 1; terrainVelocity = .0045; terrainTargetVelocity = .0045; terrainNextTurnFrame = null;
+  }),
   prism: () => legacyActivation(drawPrism),
   overlap: () => legacyActivation(drawOverlap, { reset: resetOverlapState, resize: resetOverlapState }),
   universe: () => legacyActivation(drawUniverse, { reset: () => {
     universeAngle = 0; universeVelocity = .00052; universePreviousLow = 0; universeReverseUntil = 0; universeLastGlitch = -600;
   } }),
   tangle: () => legacyActivation(drawTangle, { reset: () => { tangleDots = []; }, resize: () => { tangleDots = []; } }),
-  tunnel: () => legacyActivation(drawTunnel, { reset: () => {
-    tunnelHistory = []; tunnelGrid = []; tunnelRotation.x = .48; tunnelRotation.y = -.32; tunnelRotation.z = .12;
+  tunnel: () => spectrumHistoryActivation(drawTunnel, () => {
+    tunnelGrid = []; tunnelRotation.x = .48; tunnelRotation.y = -.32; tunnelRotation.z = .12;
     tunnelVelocity.x = .0018; tunnelVelocity.y = -.0013; tunnelVelocity.z = .0011;
     tunnelTargetVelocity.x = tunnelVelocity.x; tunnelTargetVelocity.y = tunnelVelocity.y; tunnelTargetVelocity.z = tunnelVelocity.z;
     tunnelNextDirection = 0;
-  } }),
+  }),
   trace: () => legacyActivation(drawTrace, { reset: () => {
     traceLayers = []; tracePreviousLow = 0; traceLowAverage = .12; traceLastBeat = -100; traceLastAttempt = -100;
   } }),

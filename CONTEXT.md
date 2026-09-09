@@ -45,3 +45,7 @@ A visualization activation that throws during entry, rendering, or resize. The v
 ### Audio frame
 
 The single sound snapshot sampled for one animation tick. It contains normalized frequency bands, spectrum and waveform buffers, timing, sample-rate metadata, and whether the listening session is live. Every visualization rendered during that tick receives the same audio frame.
+
+### Spectrum history
+
+An activation-scoped, newest-first sequence of logarithmically sampled spectrum rows. Terrain and Tunnel share its sampling rules while projecting the rows into different geometry. Rows are capped and recycled after warmup.
