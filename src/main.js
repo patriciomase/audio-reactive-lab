@@ -105,6 +105,9 @@ let glyphLastColorWave = -100;
 let pulseX = innerWidth * .5;
 let pulseY = innerHeight * .5;
 let pulseHue = 230;
+let pulseTrails = [];
+let pulseLastTrailX = pulseX;
+let pulseLastTrailY = pulseY;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -1188,23 +1191,41 @@ function drawGlyph(w, h, b) {
 function drawPulse(w, h, b) {
   const diameter = w * (w <= 700 ? .25 : .05);
   const radius = diameter * .5;
-  const amplitude = Math.min(w, h) * (.008 + Math.min(1, b.level) * .055);
+  const amplitude = Math.min(w, h) * (.018 + Math.min(1, b.level) * .09);
   let waveX;
   let waveY;
   if (audio) {
     const xIndex = (frame * 17) % audio.waveform.length;
     const yIndex = (xIndex + Math.floor(audio.waveform.length * .37)) % audio.waveform.length;
-    waveX = (audio.waveform[xIndex] - 128) / 128;
-    waveY = (audio.waveform[yIndex] - 128) / 128;
+    const sampleX = (audio.waveform[xIndex] - 128) / 128;
+    const sampleY = (audio.waveform[yIndex] - 128) / 128;
+    waveX = Math.max(-1, Math.min(1, sampleX * 6 + Math.sin(frame * .71) * b.high * .42 + Math.sin(frame * .29) * b.low * .24));
+    waveY = Math.max(-1, Math.min(1, sampleY * 6 + Math.sin(frame * .83 + 1.4) * b.mid * .38 + Math.sin(frame * .37) * b.low * .22));
   } else {
-    waveX = Math.sin(frame * .071) * (.38 + b.mid);
-    waveY = Math.sin(frame * .093 + 1.7) * (.32 + b.high);
+    waveX = Math.sin(frame * .19) * (.46 + b.mid);
+    waveY = Math.sin(frame * .23 + 1.7) * (.42 + b.high);
   }
   const targetX = w * .5 + waveX * amplitude;
   const targetY = h * .5 + waveY * amplitude;
-  pulseX += (targetX - pulseX) * .32;
-  pulseY += (targetY - pulseY) * .32;
+  pulseX += (targetX - pulseX) * .62;
+  pulseY += (targetY - pulseY) * .62;
   pulseHue += ((205 + b.low * 150 + b.mid * 210 + b.high * 290) - pulseHue) * .08;
+
+  const trailDistance = Math.hypot(pulseX - pulseLastTrailX, pulseY - pulseLastTrailY);
+  if (trailDistance > Math.max(2, radius * .1)) {
+    pulseTrails.push({ x: pulseLastTrailX, y: pulseLastTrailY, radius, hue: pulseHue, alpha: .13 });
+    pulseTrails = pulseTrails.slice(-9);
+    pulseLastTrailX = pulseX;
+    pulseLastTrailY = pulseY;
+  }
+  pulseTrails = pulseTrails.filter((trail) => trail.alpha > .012);
+  pulseTrails.forEach((trail) => {
+    trail.alpha *= .74;
+    ctx.fillStyle = color(trail.hue, 90, 58, trail.alpha);
+    ctx.beginPath();
+    ctx.arc(trail.x, trail.y, trail.radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
 
   const orb = ctx.createRadialGradient(
     pulseX - radius * .2,
@@ -1214,13 +1235,16 @@ function drawPulse(w, h, b) {
     pulseY,
     radius,
   );
-  orb.addColorStop(0, color(pulseHue + 24, 94, 76, .68));
-  orb.addColorStop(.55, color(pulseHue, 92, 60, .52));
-  orb.addColorStop(1, color(pulseHue - 32, 88, 48, .3));
+  orb.addColorStop(0, color(pulseHue + 24, 94, 76, 1));
+  orb.addColorStop(.55, color(pulseHue, 92, 60, .88));
+  orb.addColorStop(1, color(pulseHue - 32, 88, 48, .62));
+  ctx.save();
+  ctx.globalAlpha = .46;
   ctx.fillStyle = orb;
   ctx.beginPath();
   ctx.arc(pulseX, pulseY, radius, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 }
 
 function draw() {
@@ -1350,6 +1374,11 @@ modeButtons.forEach((button) => button.addEventListener('click', async (event) =
   tunnelGrid = [];
   equalizerTextLayers = [];
   if (mode === 'glyph') resetGlyphCanvas();
+  if (mode === 'pulse') {
+    pulseTrails = [];
+    pulseLastTrailX = pulseX;
+    pulseLastTrailY = pulseY;
+  }
   if (previousMode === 'trace' && mode !== 'trace') traceLayers = [];
   modeButtons.forEach((item) => item.classList.toggle('active', item === button));
   modeSelect.value = mode;
