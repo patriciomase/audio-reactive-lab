@@ -10,6 +10,10 @@ A named experience users can select directly or reach through the carousel. A vi
 
 The module that owns the visualization catalog, active visualization lifecycle, frame dispatch, resize dispatch, carousel eligibility, media requirements, and visualization-specific settings visibility.
 
+### Visualization player
+
+The module that owns selection policy around the visualization runtime: authoritative current visualization, serialized transitions, carousel timing, eligibility-based advancement, and failure recovery. Browser UI, URL, storage, analytics, and media are adapters at its seams.
+
 ### Activation
 
 One continuous period in which a visualization is selected. State belongs to an activation and is not retained after leaving it.

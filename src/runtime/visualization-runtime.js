@@ -36,6 +36,11 @@ export function createVisualizationRuntime({
     const previousDefinition = activeDefinition;
     try {
       await beforeActivate({ previousDefinition, nextDefinition, meta });
+    } catch (error) {
+      onError(error, nextDefinition, 'enter');
+      return false;
+    }
+    try {
       disposeActive();
       active = nextDefinition.create();
       activeDefinition = nextDefinition;

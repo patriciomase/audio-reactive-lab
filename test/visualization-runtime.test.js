@@ -56,3 +56,21 @@ test('carousel eligibility is catalog-driven', () => {
   assert.deepEqual(runtime.eligible({ hasCamera: false }).map(({ id }) => id), ['orbit']);
   assert.deepEqual(runtime.eligible({ hasCamera: true }).map(({ id }) => id), ['orbit', 'trace']);
 });
+
+test('a failed preparation preserves the current activation', async () => {
+  let renders = 0;
+  const runtime = createVisualizationRuntime({
+    definitions: [
+      { id: 'orbit', label: 'Orbit', create: () => ({ render: () => { renders += 1; } }) },
+      { id: 'trace', label: 'Trace', create: () => ({ render() {} }) },
+    ],
+    beforeActivate: async ({ nextDefinition }) => {
+      if (nextDefinition.id === 'trace') throw new Error('camera denied');
+    },
+  });
+  await runtime.activate('orbit');
+  assert.equal(await runtime.activate('trace'), false);
+  assert.equal(runtime.activeId, 'orbit');
+  assert.equal(runtime.render({}), true);
+  assert.equal(renders, 1);
+});

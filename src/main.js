@@ -2,7 +2,7 @@ import './styles.css';
 import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
-import { createVisualizationRuntime } from './runtime/visualization-runtime.js';
+import { createVisualizationPlayer } from './runtime/visualization-player.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 
 const canvas = document.querySelector('canvas');
@@ -42,9 +42,8 @@ let autoTransition = savedSettings.autoTransition === true;
 let transitionTime = Number.isFinite(Number(savedSettings.transitionTime))
   ? Math.max(Number(transitionTimeInput.min), Math.min(Number(transitionTimeInput.max), Number(savedSettings.transitionTime)))
   : Number(transitionTimeInput.value);
-let carouselTimer = null;
 let modesHideTimer = null;
-let runtime = null;
+let player = null;
 const audioFrames = createAudioFrameSampler();
 let equalizerText = typeof savedSettings.equalizerText === 'string'
   ? savedSettings.equalizerText.slice(0, 24) : 'LIVE';
@@ -154,14 +153,7 @@ function updateListenLabel() {
 }
 
 function scheduleCarousel() {
-  clearTimeout(carouselTimer);
-  if (!autoTransition || !runtime) return;
-  carouselTimer = setTimeout(() => {
-    const available = runtime.eligible({ hasCamera: Boolean(audio?.hasCamera) });
-    const currentIndex = available.findIndex((definition) => definition.id === mode);
-    const next = available[(currentIndex + 1 + available.length) % available.length];
-    switchVisualization(next.id, { carousel: true });
-  }, transitionTime * 1000);
+  player?.configureCarousel({ enabled: autoTransition, intervalMs: transitionTime * 1000 });
 }
 
 updateListenLabel();
@@ -1154,7 +1146,7 @@ function draw() {
     time: performance.now(),
   });
   drawBackground(innerWidth, innerHeight);
-  runtime?.render({
+  player?.render({
     ctx,
     width: innerWidth,
     height: innerHeight,
@@ -1298,24 +1290,18 @@ const legacyFactories = {
 
 const definitions = createVisualizationCatalog(legacyFactories);
 
-function advanceAfterFailure() {
-  if (!autoTransition || !runtime) return;
-  const available = runtime.eligible({ hasCamera: Boolean(audio?.hasCamera) });
-  const currentIndex = available.findIndex((definition) => definition.id === mode);
-  const next = available[(currentIndex + 1 + available.length) % available.length];
-  setTimeout(() => switchVisualization(next.id, { carousel: true }), 500);
-}
-
-runtime = createVisualizationRuntime({
+player = createVisualizationPlayer({
   definitions,
-  beforeActivate: async ({ previousDefinition, nextDefinition, meta }) => {
+  initialId: mode,
+  eligibility: () => ({ hasCamera: Boolean(audio?.hasCamera) }),
+  prepareTransition: async ({ previousDefinition, nextDefinition, meta }) => {
     if (previousDefinition?.media === 'camera' && nextDefinition.media !== 'camera') disableTraceCamera();
     if (nextDefinition.media === 'camera' && audio && !audio.hasCamera) {
-      if (meta.carousel) throw new Error('Carousel cannot request camera access.');
+      if (meta.reason === 'carousel') throw new Error('Carousel cannot request camera access.');
       if (!await enableTraceCamera()) throw new Error('Camera access was blocked.');
     }
   },
-  afterActivate: ({ nextDefinition }) => {
+  onChange: ({ current: nextDefinition }) => {
     mode = nextDefinition.id;
     modeSelect.value = mode;
     error.hidden = true;
@@ -1325,21 +1311,19 @@ runtime = createVisualizationRuntime({
     history.replaceState({}, '', url);
     saveSettings();
     updateListenLabel();
-    scheduleCarousel();
     window.umami?.track('visualization-changed', { visualization: mode });
   },
-  onError: (cause, definition, phase) => {
+  onError: ({ error: cause, definition, phase }) => {
     modeSelect.value = mode;
     error.textContent = `${definition?.label ?? 'Visualization'} failed during ${phase}. Moving to a safe visualization.`;
     error.hidden = false;
     window.umami?.track('visualization-error', { visualization: definition?.id ?? 'unknown', phase });
     console.error(cause);
-    advanceAfterFailure();
   },
 });
 
 async function switchVisualization(id, meta = {}) {
-  await runtime.activate(id, meta);
+  await player.select(id, meta);
 }
 
 listenButton.addEventListener('click', () => audio ? stopAudio() : startAudio());
@@ -1371,9 +1355,9 @@ equalizerTextInput.addEventListener('input', () => {
   equalizerText = equalizerTextInput.value.slice(0, 24).toUpperCase();
   saveSettings();
 });
-modeSelect.addEventListener('change', () => switchVisualization(modeSelect.value, { userInitiated: true }));
+modeSelect.addEventListener('change', () => switchVisualization(modeSelect.value, { reason: 'user' }));
 window.addEventListener('resize', resize);
-window.addEventListener('resize', () => runtime.resize({ width: innerWidth, height: innerHeight }));
+window.addEventListener('resize', () => player.resize({ width: innerWidth, height: innerHeight }));
 window.addEventListener('pointermove', (event) => {
   if (event.pointerType && event.pointerType !== 'mouse') return;
   app.classList.toggle('show-modes', Boolean(audio) && event.clientY > innerHeight - 96);
@@ -1387,10 +1371,10 @@ window.addEventListener('pointerdown', (event) => {
 });
 document.documentElement.addEventListener('mouseleave', () => app.classList.remove('show-modes'));
 window.addEventListener('pagehide', () => {
-  runtime.dispose();
+  player.dispose();
   if (audio) stopAudio();
 });
 resize();
-await switchVisualization(mode, { initial: true });
-draw();
 scheduleCarousel();
+await switchVisualization(mode, { reason: 'initial' });
+draw();
