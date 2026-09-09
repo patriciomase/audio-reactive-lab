@@ -1,4 +1,6 @@
 import './styles.css';
+import { createVisualizationRuntime } from './runtime/visualization-runtime.js';
+import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
@@ -16,10 +18,9 @@ const transitionTimeInput = document.querySelector('#transition-time');
 const transitionTimeValue = document.querySelector('.transition-value');
 const equalizerTextInput = document.querySelector('#equalizer-text');
 const modeSelect = document.querySelector('#visualization-mode');
-const modeButtons = [...document.querySelectorAll('nav button')];
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel', 'trace', 'equalizer', 'glyph', 'pulse']);
+const validModes = new Set(visualizationMetadata.map(([id]) => id));
 const validColorModes = new Set([...colorModeInput.options].map((option) => option.value));
 let savedSettings = {};
 try {
@@ -38,8 +39,8 @@ let transitionTime = Number.isFinite(Number(savedSettings.transitionTime))
   ? Math.max(Number(transitionTimeInput.min), Math.min(Number(transitionTimeInput.max), Number(savedSettings.transitionTime)))
   : Number(transitionTimeInput.value);
 let carouselTimer = null;
-let manualModeSelection = false;
 let modesHideTimer = null;
+let runtime = null;
 let equalizerText = typeof savedSettings.equalizerText === 'string'
   ? savedSettings.equalizerText.slice(0, 24) : 'LIVE';
 if (equalizerText === 'DJ PATO') equalizerText = 'LIVE';
@@ -102,12 +103,6 @@ let glyphLastBeat = -100;
 let glyphColorWaves = [];
 let glyphNextWave = 0;
 let glyphLastColorWave = -100;
-let pulseX = innerWidth * .5;
-let pulseY = innerHeight * .5;
-let pulseHue = 230;
-let pulseTrails = [];
-let pulseLastTrailX = pulseX;
-let pulseLastTrailY = pulseY;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -133,7 +128,12 @@ const traceCaptureCtx = traceCapture.getContext('2d', { willReadFrequently: true
 traceVideo.muted = true;
 traceVideo.playsInline = true;
 
-modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
+visualizationMetadata.forEach(([id, label], index) => {
+  const option = document.createElement('option');
+  option.value = id;
+  option.textContent = `${String(index + 1).padStart(2, '0')} — ${label}`;
+  modeSelect.append(option);
+});
 modeSelect.value = mode;
 app.classList.toggle('equalizer-mode', mode === 'equalizer');
 
@@ -152,11 +152,12 @@ function updateListenLabel() {
 
 function scheduleCarousel() {
   clearTimeout(carouselTimer);
-  if (!autoTransition) return;
+  if (!autoTransition || !runtime) return;
   carouselTimer = setTimeout(() => {
-    const availableModes = modeButtons.filter((button) => button.dataset.mode !== 'trace' || audio?.hasCamera);
-    const currentIndex = availableModes.findIndex((button) => button.dataset.mode === mode);
-    availableModes[(currentIndex + 1 + availableModes.length) % availableModes.length].click();
+    const available = runtime.eligible({ hasCamera: Boolean(audio?.hasCamera) });
+    const currentIndex = available.findIndex((definition) => definition.id === mode);
+    const next = available[(currentIndex + 1 + available.length) % available.length];
+    switchVisualization(next.id, { carousel: true });
   }, transitionTime * 1000);
 }
 
@@ -1188,66 +1189,19 @@ function drawGlyph(w, h, b) {
   ctx.stroke();
 }
 
-function drawPulse(w, h, b) {
-  const diameter = w * (w <= 700 ? 1 / 3 : 1 / 12);
-  const radius = diameter * .5;
-  const amplitude = Math.min(w, h) * (.018 + Math.min(1, b.level) * .09);
-  let waveX;
-  let waveY;
-  if (audio) {
-    const xIndex = (frame * 17) % audio.waveform.length;
-    const yIndex = (xIndex + Math.floor(audio.waveform.length * .37)) % audio.waveform.length;
-    const sampleX = (audio.waveform[xIndex] - 128) / 128;
-    const sampleY = (audio.waveform[yIndex] - 128) / 128;
-    waveX = Math.max(-1, Math.min(1, sampleX * 6 + Math.sin(frame * .71) * b.high * .42 + Math.sin(frame * .29) * b.low * .24));
-    waveY = Math.max(-1, Math.min(1, sampleY * 6 + Math.sin(frame * .83 + 1.4) * b.mid * .38 + Math.sin(frame * .37) * b.low * .22));
-  } else {
-    waveX = Math.sin(frame * .19) * (.46 + b.mid);
-    waveY = Math.sin(frame * .23 + 1.7) * (.42 + b.high);
-  }
-  const targetX = w * .5 + waveX * amplitude;
-  const targetY = h * .5 + waveY * amplitude;
-  pulseX += (targetX - pulseX) * .62;
-  pulseY += (targetY - pulseY) * .62;
-  pulseHue += ((205 + b.low * 150 + b.mid * 210 + b.high * 290) - pulseHue) * .08;
-
-  const trailDistance = Math.hypot(pulseX - pulseLastTrailX, pulseY - pulseLastTrailY);
-  if (trailDistance > Math.max(2, radius * .1)) {
-    pulseTrails.push({ x: pulseLastTrailX, y: pulseLastTrailY, radius, hue: pulseHue, alpha: .08 });
-    pulseTrails = pulseTrails.slice(-9);
-    pulseLastTrailX = pulseX;
-    pulseLastTrailY = pulseY;
-  }
-  pulseTrails = pulseTrails.filter((trail) => trail.alpha > .012);
-  pulseTrails.forEach((trail) => {
-    trail.alpha *= .74;
-    ctx.fillStyle = color(trail.hue, 90, 58, trail.alpha);
-    ctx.beginPath();
-    ctx.arc(trail.x, trail.y, trail.radius, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  ctx.fillStyle = color(pulseHue, 92, 60, .38);
-  ctx.beginPath();
-  ctx.arc(pulseX, pulseY, radius, 0, Math.PI * 2);
-  ctx.fill();
-}
-
 function draw() {
   frame += 1;
   const b = bands();
   drawBackground(innerWidth, innerHeight);
-  if (mode === 'orbit') drawOrbit(innerWidth, innerHeight, b);
-  if (mode === 'terrain') drawTerrain(innerWidth, innerHeight, b);
-  if (mode === 'prism') drawPrism(innerWidth, innerHeight, b);
-  if (mode === 'overlap') drawOverlap(innerWidth, innerHeight, b);
-  if (mode === 'universe') drawUniverse(innerWidth, innerHeight, b);
-  if (mode === 'tangle') drawTangle(innerWidth, innerHeight, b);
-  if (mode === 'tunnel') drawTunnel(innerWidth, innerHeight, b);
-  if (mode === 'trace') drawTrace(innerWidth, innerHeight, b);
-  if (mode === 'equalizer') drawEqualizer(innerWidth, innerHeight, b);
-  if (mode === 'glyph') drawGlyph(innerWidth, innerHeight, b);
-  if (mode === 'pulse') drawPulse(innerWidth, innerHeight, b);
+  runtime?.render({
+    ctx,
+    width: innerWidth,
+    height: innerHeight,
+    bands: b,
+    audio,
+    frame,
+    color,
+  });
   requestAnimationFrame(draw);
 }
 
@@ -1260,9 +1214,11 @@ async function enableTraceCamera() {
     await traceVideo.play();
     audio.hasCamera = true;
     statusText.textContent = 'MIC + CAMERA LIVE';
+    return true;
   } catch {
     error.textContent = 'Camera access was blocked. Allow it in your browser to use Trace.';
     error.hidden = false;
+    return false;
   }
 }
 
@@ -1281,7 +1237,6 @@ async function startAudio() {
     const needsCamera = mode === 'trace';
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      ...(needsCamera ? { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : {}),
     });
     const context = new AudioContext();
     const source = context.createMediaStreamSource(stream);
@@ -1289,21 +1244,16 @@ async function startAudio() {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = .78;
     source.connect(analyser);
-    audio = { context, stream, analyser, frequency: new Uint8Array(analyser.frequencyBinCount), waveform: new Uint8Array(analyser.fftSize), hasCamera: needsCamera };
-    if (needsCamera) {
-      traceVideo.srcObject = new MediaStream(stream.getVideoTracks());
-      await traceVideo.play();
-    }
+    audio = { context, stream, analyser, frequency: new Uint8Array(analyser.frequencyBinCount), waveform: new Uint8Array(analyser.fftSize), hasCamera: false };
+    if (needsCamera) await enableTraceCamera();
     status.classList.add('live');
-    statusText.textContent = needsCamera ? 'MIC + CAMERA LIVE' : 'MIC LIVE';
+    statusText.textContent = audio.hasCamera ? 'MIC + CAMERA LIVE' : 'MIC LIVE';
     listenButton.classList.add('secondary');
     listenButton.textContent = 'Stop listening';
     app.classList.add('immersive');
     window.umami?.track('microphone-enabled');
   } catch {
-    error.textContent = mode === 'trace'
-      ? 'Microphone or camera access was blocked. Allow both in your browser and try again.'
-      : 'Microphone access was blocked. Allow it in your browser and try again.';
+    error.textContent = 'Microphone access was blocked. Allow it in your browser and try again.';
     error.hidden = false;
   }
 }
@@ -1319,6 +1269,105 @@ function stopAudio() {
   listenButton.classList.remove('secondary');
   updateListenLabel();
   app.classList.remove('immersive', 'show-modes');
+}
+
+function resetOverlapState() {
+  squares = [];
+  overlapShape = {
+    current: 'square',
+    from: 'square',
+    target: 'square',
+    progress: 1,
+    started: 0,
+    duration: 0,
+    nextAt: performance.now() + 120000 + Math.random() * 60000,
+  };
+}
+
+function legacyActivation(drawVisualization, { reset = () => {}, resize: onResize } = {}) {
+  reset();
+  return {
+    render: ({ width, height, bands: currentBands }) => drawVisualization(width, height, currentBands),
+    resize: onResize,
+    dispose: reset,
+  };
+}
+
+const legacyFactories = {
+  orbit: () => legacyActivation(drawOrbit, { reset: () => {
+    reverbWaves = []; previousLow = 0; orbitAngle = 0; orbitDirection = 1; reverseUntil = 0; lastWaveFrame = -100;
+  } }),
+  terrain: () => legacyActivation(drawTerrain, { reset: () => {
+    spectrumHistory = []; terrainAngle = 0; terrainDirection = 1; terrainVelocity = .0045; terrainTargetVelocity = .0045; terrainNextTurnFrame = null;
+  } }),
+  prism: () => legacyActivation(drawPrism),
+  overlap: () => legacyActivation(drawOverlap, { reset: resetOverlapState, resize: resetOverlapState }),
+  universe: () => legacyActivation(drawUniverse, { reset: () => {
+    universeAngle = 0; universeVelocity = .00052; universePreviousLow = 0; universeReverseUntil = 0; universeLastGlitch = -600;
+  } }),
+  tangle: () => legacyActivation(drawTangle, { reset: () => { tangleDots = []; }, resize: () => { tangleDots = []; } }),
+  tunnel: () => legacyActivation(drawTunnel, { reset: () => {
+    tunnelHistory = []; tunnelGrid = []; tunnelRotation.x = .48; tunnelRotation.y = -.32; tunnelRotation.z = .12;
+    tunnelVelocity.x = .0018; tunnelVelocity.y = -.0013; tunnelVelocity.z = .0011;
+    tunnelTargetVelocity.x = tunnelVelocity.x; tunnelTargetVelocity.y = tunnelVelocity.y; tunnelTargetVelocity.z = tunnelVelocity.z;
+    tunnelNextDirection = 0;
+  } }),
+  trace: () => legacyActivation(drawTrace, { reset: () => {
+    traceLayers = []; tracePreviousLow = 0; traceLowAverage = .12; traceLastBeat = -100; traceLastAttempt = -100;
+  } }),
+  equalizer: () => legacyActivation(drawEqualizer, { reset: () => {
+    equalizerEnergies = []; equalizerTextLayers = []; equalizerPreviousLow = 0; equalizerLowAverage = .12; equalizerLastBeat = -100;
+  } }),
+  glyph: () => legacyActivation(drawGlyph, {
+    reset: () => resetGlyphCanvas(),
+    resize: () => resetGlyphCanvas(innerWidth, innerHeight, true),
+  }),
+};
+
+const definitions = createVisualizationCatalog(legacyFactories);
+
+function advanceAfterFailure() {
+  if (!autoTransition || !runtime) return;
+  const available = runtime.eligible({ hasCamera: Boolean(audio?.hasCamera) });
+  const currentIndex = available.findIndex((definition) => definition.id === mode);
+  const next = available[(currentIndex + 1 + available.length) % available.length];
+  setTimeout(() => switchVisualization(next.id, { carousel: true }), 500);
+}
+
+runtime = createVisualizationRuntime({
+  definitions,
+  beforeActivate: async ({ previousDefinition, nextDefinition, meta }) => {
+    if (previousDefinition?.media === 'camera' && nextDefinition.media !== 'camera') disableTraceCamera();
+    if (nextDefinition.media === 'camera' && audio && !audio.hasCamera) {
+      if (meta.carousel) throw new Error('Carousel cannot request camera access.');
+      if (!await enableTraceCamera()) throw new Error('Camera access was blocked.');
+    }
+  },
+  afterActivate: ({ nextDefinition }) => {
+    mode = nextDefinition.id;
+    modeSelect.value = mode;
+    error.hidden = true;
+    app.classList.toggle('equalizer-mode', nextDefinition.settings.includes('equalizerText'));
+    const url = new URL(location.href);
+    url.searchParams.set('mode', mode);
+    history.replaceState({}, '', url);
+    saveSettings();
+    updateListenLabel();
+    scheduleCarousel();
+    window.umami?.track('visualization-changed', { visualization: mode });
+  },
+  onError: (cause, definition, phase) => {
+    modeSelect.value = mode;
+    error.textContent = `${definition?.label ?? 'Visualization'} failed during ${phase}. Moving to a safe visualization.`;
+    error.hidden = false;
+    window.umami?.track('visualization-error', { visualization: definition?.id ?? 'unknown', phase });
+    console.error(cause);
+    advanceAfterFailure();
+  },
+});
+
+async function switchVisualization(id, meta = {}) {
+  await runtime.activate(id, meta);
 }
 
 listenButton.addEventListener('click', () => audio ? stopAudio() : startAudio());
@@ -1350,42 +1399,9 @@ equalizerTextInput.addEventListener('input', () => {
   equalizerText = equalizerTextInput.value.slice(0, 24).toUpperCase();
   saveSettings();
 });
-modeButtons.forEach((button) => button.addEventListener('click', async (event) => {
-  const userInitiated = event.isTrusted || manualModeSelection;
-  const previousMode = mode;
-  mode = button.dataset.mode;
-  spectrumHistory = [];
-  reverbWaves = [];
-  tunnelHistory = [];
-  tunnelGrid = [];
-  equalizerTextLayers = [];
-  if (mode === 'glyph') resetGlyphCanvas();
-  if (mode === 'pulse') {
-    pulseTrails = [];
-    pulseLastTrailX = pulseX;
-    pulseLastTrailY = pulseY;
-  }
-  if (previousMode === 'trace' && mode !== 'trace') traceLayers = [];
-  modeButtons.forEach((item) => item.classList.toggle('active', item === button));
-  modeSelect.value = mode;
-  app.classList.toggle('equalizer-mode', mode === 'equalizer');
-  const url = new URL(location.href);
-  url.searchParams.set('mode', mode);
-  history.replaceState({}, '', url);
-  saveSettings();
-  if (!audio) updateListenLabel();
-  else if (mode === 'trace' && !audio.hasCamera) await enableTraceCamera();
-  else if (mode !== 'trace' && (!autoTransition || userInitiated)) disableTraceCamera();
-  scheduleCarousel();
-  window.umami?.track('visualization-changed', { visualization: mode });
-}));
-modeSelect.addEventListener('change', () => {
-  manualModeSelection = true;
-  modeButtons.find((button) => button.dataset.mode === modeSelect.value)?.click();
-  manualModeSelection = false;
-});
+modeSelect.addEventListener('change', () => switchVisualization(modeSelect.value, { userInitiated: true }));
 window.addEventListener('resize', resize);
-window.addEventListener('resize', () => { squares = []; tangleDots = []; resetGlyphCanvas(innerWidth, innerHeight, true); });
+window.addEventListener('resize', () => runtime.resize({ width: innerWidth, height: innerHeight }));
 window.addEventListener('pointermove', (event) => {
   if (event.pointerType && event.pointerType !== 'mouse') return;
   app.classList.toggle('show-modes', Boolean(audio) && event.clientY > innerHeight - 96);
@@ -1398,7 +1414,11 @@ window.addEventListener('pointerdown', (event) => {
   if (nearBottom) modesHideTimer = setTimeout(() => app.classList.remove('show-modes'), 4000);
 });
 document.documentElement.addEventListener('mouseleave', () => app.classList.remove('show-modes'));
-window.addEventListener('pagehide', () => audio && stopAudio());
+window.addEventListener('pagehide', () => {
+  runtime.dispose();
+  if (audio) stopAudio();
+});
 resize();
+await switchVisualization(mode, { initial: true });
 draw();
 scheduleCarousel();
