@@ -49,16 +49,30 @@
         </div>
       </aside>
       <nav aria-label="Visual modes">
-        <button data-mode="orbit" class="active"><span>01</span>Orbit</button>
-        <button data-mode="terrain"><span>02</span>Terrain</button>
-        <button data-mode="prism"><span>03</span>Prism</button>
-        <button data-mode="overlap"><span>04</span>Overlap</button>
-        <button data-mode="universe"><span>05</span>Universe</button>
-        <button data-mode="tangle"><span>06</span>Tangle</button>
-        <button data-mode="tunnel"><span>07</span>Tunnel</button>
-        <button data-mode="trace"><span>08</span>Trace</button>
-        <button data-mode="equalizer"><span>09</span>Equalizer</button>
-        <button data-mode="glyph"><span>10</span>Glyph</button>
+        <select id="visualization-mode" aria-label="Visualization">
+          <option value="orbit">01 — Orbit</option>
+          <option value="terrain">02 — Terrain</option>
+          <option value="prism">03 — Prism</option>
+          <option value="overlap">04 — Overlap</option>
+          <option value="universe">05 — Universe</option>
+          <option value="tangle">06 — Tangle</option>
+          <option value="tunnel">07 — Tunnel</option>
+          <option value="trace">08 — Trace</option>
+          <option value="equalizer">09 — Equalizer</option>
+          <option value="glyph">10 — Glyph</option>
+        </select>
+        <div hidden>
+          <button data-mode="orbit" class="active">Orbit</button>
+          <button data-mode="terrain">Terrain</button>
+          <button data-mode="prism">Prism</button>
+          <button data-mode="overlap">Overlap</button>
+          <button data-mode="universe">Universe</button>
+          <button data-mode="tangle">Tangle</button>
+          <button data-mode="tunnel">Tunnel</button>
+          <button data-mode="trace">Trace</button>
+          <button data-mode="equalizer">Equalizer</button>
+          <button data-mode="glyph">Glyph</button>
+        </div>
       </nav>
     </main>
     <script type="module" src="/src/main.js"></script>

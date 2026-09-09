@@ -15,6 +15,7 @@ const autoTransitionState = document.querySelector('.auto-state');
 const transitionTimeInput = document.querySelector('#transition-time');
 const transitionTimeValue = document.querySelector('.transition-value');
 const equalizerTextInput = document.querySelector('#equalizer-text');
+const modeSelect = document.querySelector('#visualization-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
@@ -37,6 +38,8 @@ let transitionTime = Number.isFinite(Number(savedSettings.transitionTime))
   ? Math.max(Number(transitionTimeInput.min), Math.min(Number(transitionTimeInput.max), Number(savedSettings.transitionTime)))
   : Number(transitionTimeInput.value);
 let carouselTimer = null;
+let manualModeSelection = false;
+let modesHideTimer = null;
 let equalizerText = typeof savedSettings.equalizerText === 'string'
   ? savedSettings.equalizerText.slice(0, 24) : 'LIVE';
 if (equalizerText === 'DJ PATO') equalizerText = 'LIVE';
@@ -125,6 +128,7 @@ traceVideo.muted = true;
 traceVideo.playsInline = true;
 
 modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode));
+modeSelect.value = mode;
 app.classList.toggle('equalizer-mode', mode === 'equalizer');
 
 function saveSettings() {
@@ -1295,6 +1299,7 @@ equalizerTextInput.addEventListener('input', () => {
   saveSettings();
 });
 modeButtons.forEach((button) => button.addEventListener('click', async (event) => {
+  const userInitiated = event.isTrusted || manualModeSelection;
   const previousMode = mode;
   mode = button.dataset.mode;
   spectrumHistory = [];
@@ -1305,6 +1310,7 @@ modeButtons.forEach((button) => button.addEventListener('click', async (event) =
   if (mode === 'glyph') resetGlyphCanvas();
   if (previousMode === 'trace' && mode !== 'trace') traceLayers = [];
   modeButtons.forEach((item) => item.classList.toggle('active', item === button));
+  modeSelect.value = mode;
   app.classList.toggle('equalizer-mode', mode === 'equalizer');
   const url = new URL(location.href);
   url.searchParams.set('mode', mode);
@@ -1312,14 +1318,27 @@ modeButtons.forEach((button) => button.addEventListener('click', async (event) =
   saveSettings();
   if (!audio) updateListenLabel();
   else if (mode === 'trace' && !audio.hasCamera) await enableTraceCamera();
-  else if (mode !== 'trace' && (!autoTransition || event.isTrusted)) disableTraceCamera();
+  else if (mode !== 'trace' && (!autoTransition || userInitiated)) disableTraceCamera();
   scheduleCarousel();
   window.umami?.track('visualization-changed', { visualization: mode });
 }));
+modeSelect.addEventListener('change', () => {
+  manualModeSelection = true;
+  modeButtons.find((button) => button.dataset.mode === modeSelect.value)?.click();
+  manualModeSelection = false;
+});
 window.addEventListener('resize', resize);
 window.addEventListener('resize', () => { squares = []; tangleDots = []; resetGlyphCanvas(innerWidth, innerHeight, true); });
 window.addEventListener('pointermove', (event) => {
+  if (event.pointerType && event.pointerType !== 'mouse') return;
   app.classList.toggle('show-modes', Boolean(audio) && event.clientY > innerHeight - 96);
+});
+window.addEventListener('pointerdown', (event) => {
+  if (event.pointerType !== 'touch' || !audio) return;
+  clearTimeout(modesHideTimer);
+  const nearBottom = event.clientY > innerHeight - 72;
+  app.classList.toggle('show-modes', nearBottom);
+  if (nearBottom) modesHideTimer = setTimeout(() => app.classList.remove('show-modes'), 4000);
 });
 document.documentElement.addEventListener('mouseleave', () => app.classList.remove('show-modes'));
 window.addEventListener('pagehide', () => audio && stopAudio());
