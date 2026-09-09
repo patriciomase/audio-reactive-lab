@@ -2,6 +2,7 @@ import './styles.css';
 import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
+import { paintBreathingZoom } from './effects/breathing-zoom.js';
 import { createVisualizationPlayer } from './runtime/visualization-player.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 import { createTraceVisualization } from './visualizations/trace.js';
@@ -1164,10 +1165,20 @@ const legacyFactories = {
   equalizer: () => legacyActivation(drawEqualizer, { reset: () => {
     equalizerEnergies = []; equalizerTextLayers = []; equalizerPreviousLow = 0; equalizerLowAverage = .12; equalizerLastBeat = -100;
   } }),
-  glyph: () => legacyActivation(drawGlyph, {
-    reset: () => resetGlyphCanvas(),
-    resize: () => resetGlyphCanvas(innerWidth, innerHeight, true),
-  }),
+  glyph: () => {
+    const glyph = legacyActivation(drawGlyph, {
+      reset: () => resetGlyphCanvas(),
+      resize: () => resetGlyphCanvas(innerWidth, innerHeight, true),
+    });
+    return {
+      render: (renderFrame) => paintBreathingZoom({
+        ...renderFrame,
+        paintSource: () => glyph.render(renderFrame),
+      }),
+      resize: glyph.resize,
+      dispose: glyph.dispose,
+    };
+  },
 };
 
 const definitions = createVisualizationCatalog(legacyFactories);

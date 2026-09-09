@@ -1,4 +1,17 @@
+import { paintBreathingZoom } from './breathing-zoom.js';
+
 export function paintKaleidoscope({ ctx, width, height, bands, frame, paintSource }) {
+  paintBreathingZoom({
+    ctx,
+    width,
+    height,
+    bands,
+    frame,
+    paintSource: () => paintKaleidoscopeSlices({ ctx, width, height, bands, frame, paintSource }),
+  });
+}
+
+function paintKaleidoscopeSlices({ ctx, width, height, bands, frame, paintSource }) {
   const cx = width * .5;
   const cy = height * .5;
   const slices = width <= 700 ? 10 : 14;
