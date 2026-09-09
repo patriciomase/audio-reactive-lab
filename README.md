@@ -16,6 +16,7 @@ Which visual direction feels worth developing into a customizable audiovisual in
 - **Trace** — when camera access is enabled, each bass beat freezes a colorized contour-only view; older outlines drift, enlarge, and fade while new moments accumulate above them.
 - **Equalizer** — a four-way mirrored classic bar spectrum gives extra response to the outer frequencies while a customizable, heavy filled title releases drifting color echoes on each beat.
 - **Glyph** — a dense character grid where beats write, replace, and slowly erase randomized symbols.
+- **Pulse** — a single translucent orb whose color and two-axis movement follow the live waveform.
 
 Once microphone input is active, the interface fades into an immersive visual-only state. Move the pointer to the right edge to reveal sensitivity and color controls, or to the bottom edge to reveal visualization types. Color presets include Original, Dark, Colorful, Random, and Vibrant, and affect only the visualization elements—not the neutral background.
 

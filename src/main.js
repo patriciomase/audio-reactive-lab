@@ -19,7 +19,7 @@ const modeSelect = document.querySelector('#visualization-mode');
 const modeButtons = [...document.querySelectorAll('nav button')];
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
-const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel', 'trace', 'equalizer', 'glyph']);
+const validModes = new Set(['orbit', 'terrain', 'prism', 'overlap', 'universe', 'tangle', 'tunnel', 'trace', 'equalizer', 'glyph', 'pulse']);
 const validColorModes = new Set([...colorModeInput.options].map((option) => option.value));
 let savedSettings = {};
 try {
@@ -102,6 +102,9 @@ let glyphLastBeat = -100;
 let glyphColorWaves = [];
 let glyphNextWave = 0;
 let glyphLastColorWave = -100;
+let pulseX = innerWidth * .5;
+let pulseY = innerHeight * .5;
+let pulseHue = 230;
 let overlapShape = {
   current: 'square',
   from: 'square',
@@ -1182,6 +1185,44 @@ function drawGlyph(w, h, b) {
   ctx.stroke();
 }
 
+function drawPulse(w, h, b) {
+  const diameter = w * (w <= 700 ? .25 : .05);
+  const radius = diameter * .5;
+  const amplitude = Math.min(w, h) * (.008 + Math.min(1, b.level) * .055);
+  let waveX;
+  let waveY;
+  if (audio) {
+    const xIndex = (frame * 17) % audio.waveform.length;
+    const yIndex = (xIndex + Math.floor(audio.waveform.length * .37)) % audio.waveform.length;
+    waveX = (audio.waveform[xIndex] - 128) / 128;
+    waveY = (audio.waveform[yIndex] - 128) / 128;
+  } else {
+    waveX = Math.sin(frame * .071) * (.38 + b.mid);
+    waveY = Math.sin(frame * .093 + 1.7) * (.32 + b.high);
+  }
+  const targetX = w * .5 + waveX * amplitude;
+  const targetY = h * .5 + waveY * amplitude;
+  pulseX += (targetX - pulseX) * .32;
+  pulseY += (targetY - pulseY) * .32;
+  pulseHue += ((205 + b.low * 150 + b.mid * 210 + b.high * 290) - pulseHue) * .08;
+
+  const orb = ctx.createRadialGradient(
+    pulseX - radius * .2,
+    pulseY - radius * .24,
+    radius * .04,
+    pulseX,
+    pulseY,
+    radius,
+  );
+  orb.addColorStop(0, color(pulseHue + 24, 94, 76, .68));
+  orb.addColorStop(.55, color(pulseHue, 92, 60, .52));
+  orb.addColorStop(1, color(pulseHue - 32, 88, 48, .3));
+  ctx.fillStyle = orb;
+  ctx.beginPath();
+  ctx.arc(pulseX, pulseY, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function draw() {
   frame += 1;
   const b = bands();
@@ -1196,6 +1237,7 @@ function draw() {
   if (mode === 'trace') drawTrace(innerWidth, innerHeight, b);
   if (mode === 'equalizer') drawEqualizer(innerWidth, innerHeight, b);
   if (mode === 'glyph') drawGlyph(innerWidth, innerHeight, b);
+  if (mode === 'pulse') drawPulse(innerWidth, innerHeight, b);
   requestAnimationFrame(draw);
 }
 
