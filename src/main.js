@@ -5,6 +5,7 @@ import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { paintBreathingZoom } from './effects/breathing-zoom.js';
 import { createVisualizationPlayer } from './runtime/visualization-player.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
+import { createGlyphField } from './visualizations/glyph-field.js';
 import { createTraceVisualization } from './visualizations/trace.js';
 
 const canvas = document.querySelector('canvas');
@@ -93,6 +94,7 @@ const glyphCanvas = document.createElement('canvas');
 const glyphCtx = glyphCanvas.getContext('2d');
 const glyphWaveCanvas = document.createElement('canvas');
 const glyphWaveCtx = glyphWaveCanvas.getContext('2d');
+const glyphField = createGlyphField();
 let glyphColumns = 0;
 let glyphRows = 0;
 let glyphCell = 12;
@@ -878,12 +880,6 @@ const GLYPH_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+=<>?/\\[]{}
 
 function resetGlyphCanvas(w = innerWidth, h = innerHeight, preserve = false) {
   const oldWidth = glyphCanvas.width;
-  const previous = preserve && oldWidth ? document.createElement('canvas') : null;
-  if (previous) {
-    previous.width = glyphCanvas.width;
-    previous.height = glyphCanvas.height;
-    previous.getContext('2d').drawImage(glyphCanvas, 0, 0);
-  }
   const scale = Math.min(1, 1920 / Math.max(1, w));
   glyphCanvas.width = Math.max(1, Math.round(w * scale));
   glyphCanvas.height = Math.max(1, Math.round(h * scale));
@@ -892,8 +888,8 @@ function resetGlyphCanvas(w = innerWidth, h = innerHeight, preserve = false) {
   glyphColumns = Math.max(16, Math.min(80, Math.floor(glyphCanvas.width / 24)));
   glyphCell = glyphCanvas.width / glyphColumns;
   glyphRows = Math.ceil(glyphCanvas.height / glyphCell);
-  if (previous) {
-    glyphCtx.drawImage(previous, 0, 0, glyphCanvas.width, glyphCanvas.height);
+  glyphField.resize(glyphColumns, glyphRows, preserve);
+  if (preserve && oldWidth) {
     const resizeScale = glyphCanvas.width / oldWidth;
     glyphColorWaves.forEach((wave) => {
       wave.x *= resizeScale;
@@ -909,21 +905,12 @@ function resetGlyphCanvas(w = innerWidth, h = innerHeight, preserve = false) {
   glyphCtx.textBaseline = 'middle';
 }
 
-function writeGlyphs(count, b, replaceChance = .28) {
-  glyphCtx.font = `${Math.max(14, glyphCell * .84)}px DM Mono, monospace`;
-  for (let i = 0; i < count; i += 1) {
-    const column = Math.floor(Math.random() * glyphColumns);
-    const row = Math.floor(Math.random() * glyphRows);
-    const x = (column + .5) * glyphCell;
-    const y = (row + .53) * glyphCell;
-    if (Math.random() < replaceChance) {
-      glyphCtx.clearRect(column * glyphCell, row * glyphCell, glyphCell, glyphCell);
-    }
+function writeGlyphs(count, b) {
+  glyphField.write(count, (column, row) => {
     const character = GLYPH_CHARACTERS[Math.floor(Math.random() * GLYPH_CHARACTERS.length)];
     const hue = 190 + column / glyphColumns * 150 + b.high * 80 + row / glyphRows * 35;
-    glyphCtx.fillStyle = color(hue, 78, 58 + Math.random() * 28, .16 + Math.random() * .78);
-    glyphCtx.fillText(character, x, y);
-  }
+    return { character, hue, lightness: 58 + Math.random() * 28, alpha: .16 + Math.random() * .78 };
+  });
 }
 
 function launchGlyphColorWave(b) {
@@ -944,11 +931,7 @@ function drawGlyph(w, h, b, audioFrame) {
     resetGlyphCanvas(w, h, true);
   }
 
-  glyphCtx.save();
-  glyphCtx.globalCompositeOperation = 'destination-out';
-  glyphCtx.fillStyle = 'rgba(0, 0, 0, .004375)';
-  glyphCtx.fillRect(0, 0, glyphCanvas.width, glyphCanvas.height);
-  glyphCtx.restore();
+  glyphField.advance();
 
   glyphLowAverage += (b.low - glyphLowAverage) * .025;
   const beat = (audioFrame.isLive
@@ -957,14 +940,26 @@ function drawGlyph(w, h, b, audioFrame) {
     && frame - glyphLastBeat > 14;
   if (beat) {
     const screenScale = glyphColumns * glyphRows / (80 * 45);
-    writeGlyphs(Math.max(14, Math.floor((65 + Math.min(1, b.level) * 260) * screenScale * .75)), b, .38);
+    writeGlyphs(Math.max(10, Math.floor((65 + Math.min(1, b.level) * 260) * screenScale * .38)), b);
     if (frame - glyphLastColorWave > 36) launchGlyphColorWave(b);
     glyphLastBeat = frame;
   } else if (Math.random() < (.12 + Math.min(.25, b.level * .2)) * .75) {
     const screenScale = glyphColumns * glyphRows / (80 * 45);
-    writeGlyphs(Math.max(1, Math.floor((1 + b.high * 7) * screenScale)), b, .72);
+    writeGlyphs(Math.max(1, Math.floor((1 + b.high * 5) * screenScale)), b);
   }
   glyphPreviousLow = b.low;
+
+  glyphCtx.clearRect(0, 0, glyphCanvas.width, glyphCanvas.height);
+  glyphCtx.font = `${Math.max(14, glyphCell * .84)}px DM Mono, monospace`;
+  glyphField.entries().forEach(({ column, row, current, outgoing }) => {
+    const x = (column + .5) * glyphCell;
+    const y = (row + .53) * glyphCell;
+    [outgoing, current].forEach((glyph) => {
+      if (!glyph) return;
+      glyphCtx.fillStyle = color(glyph.hue, 78, glyph.lightness, glyph.alpha);
+      glyphCtx.fillText(glyph.character, x, y);
+    });
+  });
 
   if (frame >= glyphNextWave && (!audioFrame.isLive || b.level > .075)) {
     if (frame - glyphLastColorWave > 36) launchGlyphColorWave(b);
@@ -1127,6 +1122,17 @@ function legacyActivation(drawVisualization, { reset = () => {}, resize: onResiz
   };
 }
 
+function breathingZoomActivation(activation) {
+  return {
+    render: (renderFrame) => paintBreathingZoom({
+      ...renderFrame,
+      paintSource: () => activation.render(renderFrame),
+    }),
+    resize: activation.resize,
+    dispose: activation.dispose,
+  };
+}
+
 function spectrumHistoryActivation(drawVisualization, reset) {
   reset();
   const history = createSpectrumHistory({ columns: TERRAIN_COLUMNS, rows: TERRAIN_ROWS });
@@ -1146,7 +1152,9 @@ const legacyFactories = {
     terrainAngle = 0; terrainDirection = 1; terrainVelocity = .0045; terrainTargetVelocity = .0045; terrainNextTurnFrame = null;
   }),
   prism: () => legacyActivation(drawPrism),
-  overlap: () => legacyActivation(drawOverlap, { reset: resetOverlapState, resize: resetOverlapState }),
+  overlap: () => breathingZoomActivation(
+    legacyActivation(drawOverlap, { reset: resetOverlapState, resize: resetOverlapState }),
+  ),
   universe: () => legacyActivation(drawUniverse, { reset: () => {
     universeAngle = 0; universeVelocity = .00052; universePreviousLow = 0; universeReverseUntil = 0; universeLastGlitch = -600;
   } }),
@@ -1170,14 +1178,7 @@ const legacyFactories = {
       reset: () => resetGlyphCanvas(),
       resize: () => resetGlyphCanvas(innerWidth, innerHeight, true),
     });
-    return {
-      render: (renderFrame) => paintBreathingZoom({
-        ...renderFrame,
-        paintSource: () => glyph.render(renderFrame),
-      }),
-      resize: glyph.resize,
-      dispose: glyph.dispose,
-    };
+    return breathingZoomActivation(glyph);
   },
 };
 
