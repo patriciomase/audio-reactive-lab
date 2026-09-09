@@ -1189,7 +1189,7 @@ function drawGlyph(w, h, b) {
 }
 
 function drawPulse(w, h, b) {
-  const diameter = w * (w <= 700 ? .25 : .05);
+  const diameter = w * (w <= 700 ? 1 / 3 : 1 / 12);
   const radius = diameter * .5;
   const amplitude = Math.min(w, h) * (.018 + Math.min(1, b.level) * .09);
   let waveX;
@@ -1213,7 +1213,7 @@ function drawPulse(w, h, b) {
 
   const trailDistance = Math.hypot(pulseX - pulseLastTrailX, pulseY - pulseLastTrailY);
   if (trailDistance > Math.max(2, radius * .1)) {
-    pulseTrails.push({ x: pulseLastTrailX, y: pulseLastTrailY, radius, hue: pulseHue, alpha: .13 });
+    pulseTrails.push({ x: pulseLastTrailX, y: pulseLastTrailY, radius, hue: pulseHue, alpha: .08 });
     pulseTrails = pulseTrails.slice(-9);
     pulseLastTrailX = pulseX;
     pulseLastTrailY = pulseY;
@@ -1227,24 +1227,10 @@ function drawPulse(w, h, b) {
     ctx.fill();
   });
 
-  const orb = ctx.createRadialGradient(
-    pulseX - radius * .2,
-    pulseY - radius * .24,
-    radius * .04,
-    pulseX,
-    pulseY,
-    radius,
-  );
-  orb.addColorStop(0, color(pulseHue + 24, 94, 76, 1));
-  orb.addColorStop(.55, color(pulseHue, 92, 60, .88));
-  orb.addColorStop(1, color(pulseHue - 32, 88, 48, .62));
-  ctx.save();
-  ctx.globalAlpha = .46;
-  ctx.fillStyle = orb;
+  ctx.fillStyle = color(pulseHue, 92, 60, .38);
   ctx.beginPath();
   ctx.arc(pulseX, pulseY, radius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.restore();
 }
 
 function draw() {
