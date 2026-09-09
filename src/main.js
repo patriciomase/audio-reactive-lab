@@ -13,6 +13,7 @@ const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
 const app = document.querySelector('main');
 const listenButton = document.querySelector('.listen');
+const settingsToggle = document.querySelector('.settings-toggle');
 const status = document.querySelector('.status');
 const statusText = status.querySelector('span');
 const error = document.querySelector('.error');
@@ -1221,6 +1222,20 @@ async function switchVisualization(id, meta = {}) {
 }
 
 listenButton.addEventListener('click', () => audio ? stopAudio() : startAudio());
+settingsToggle.addEventListener('click', () => {
+  const isOpen = app.classList.toggle('settings-open');
+  settingsToggle.setAttribute('aria-expanded', String(isOpen));
+});
+document.addEventListener('pointerdown', (event) => {
+  if (!app.classList.contains('settings-open') || event.target.closest('.meter, .settings-toggle')) return;
+  app.classList.remove('settings-open');
+  settingsToggle.setAttribute('aria-expanded', 'false');
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  app.classList.remove('settings-open');
+  settingsToggle.setAttribute('aria-expanded', 'false');
+});
 sensitivityInput.addEventListener('input', () => {
   sensitivity = Number(sensitivityInput.value);
   sensitivityValue.textContent = sensitivity.toFixed(1);

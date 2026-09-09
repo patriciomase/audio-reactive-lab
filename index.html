@@ -20,7 +20,8 @@
         <button class="listen">Enable microphone <span>↗</span></button>
         <div class="error" hidden></div>
       </section>
-      <aside class="meter" aria-label="Sensitivity control">
+      <button class="settings-toggle" type="button" aria-controls="settings-panel" aria-expanded="false">Settings</button>
+      <aside class="meter" id="settings-panel" aria-label="Settings">
         <div class="setting">
           <label for="sensitivity">SENSITIVITY <b>1.4</b></label>
           <input id="sensitivity" type="range" min="0.5" max="2.5" step="0.1" value="1.4" />
