@@ -1,4 +1,5 @@
 import './styles.css';
+import { version } from '../package.json';
 import { createVisualizationRuntime } from './runtime/visualization-runtime.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 
@@ -18,6 +19,7 @@ const transitionTimeInput = document.querySelector('#transition-time');
 const transitionTimeValue = document.querySelector('.transition-value');
 const equalizerTextInput = document.querySelector('#equalizer-text');
 const modeSelect = document.querySelector('#visualization-mode');
+document.querySelector('.app-version b').textContent = `v${version}`;
 
 const SETTINGS_KEY = 'audio-reactive-lab-settings';
 const validModes = new Set(visualizationMetadata.map(([id]) => id));
