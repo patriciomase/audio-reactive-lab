@@ -1,4 +1,4 @@
-# Audio Reactive Lab
+# FATBEATS.org
 
 An experimental, microphone-driven visual playground inspired by classic Winamp AVS, rebuilt with the Web Audio API and Canvas for the modern browser.
 
