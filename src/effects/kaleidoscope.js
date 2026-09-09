@@ -5,6 +5,7 @@ export function paintKaleidoscope({ ctx, width, height, bands, frame, paintSourc
   const sliceAngle = Math.PI * 2 / slices;
   const reach = Math.hypot(width, height);
   const rotation = frame * (.0008 + bands.mid * .0018);
+  const radii = [reach * .12, reach * .34, reach * .58];
 
   for (let slice = 0; slice < slices; slice += 1) {
     ctx.save();
@@ -16,9 +17,14 @@ export function paintKaleidoscope({ ctx, width, height, bands, frame, paintSourc
     ctx.closePath();
     ctx.clip();
     if (slice % 2) ctx.scale(1, -1);
-    ctx.rotate(-rotation);
-    ctx.translate(-cx, -cy);
-    paintSource(ctx);
+    radii.forEach((radius) => {
+      ctx.save();
+      ctx.translate(radius, 0);
+      ctx.rotate(-rotation);
+      ctx.translate(-cx, -cy);
+      paintSource(ctx);
+      ctx.restore();
+    });
     ctx.restore();
   }
 }

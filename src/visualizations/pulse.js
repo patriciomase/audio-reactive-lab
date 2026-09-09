@@ -2,7 +2,7 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-export function createPulseVisualization({ effect = null } = {}) {
+export function createPulseVisualization({ effect = null, sizeScale = 1 } = {}) {
   let x = innerWidth * .5;
   let y = innerHeight * .5;
   let hue = 230;
@@ -11,7 +11,7 @@ export function createPulseVisualization({ effect = null } = {}) {
   let lastTrailY = y;
 
   function update({ width, height, bands, audioFrame, frame }) {
-    const diameter = width * (width <= 700 ? 1 / 3 : 1 / 12);
+    const diameter = width * (width <= 700 ? 1 / 3 : 1 / 12) * sizeScale;
     const radius = diameter * .5;
     const amplitude = Math.min(width, height) * (.018 + Math.min(1, bands.level) * .09);
     let waveX;

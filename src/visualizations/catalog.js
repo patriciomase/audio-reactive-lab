@@ -33,7 +33,7 @@ export function createVisualizationCatalog(legacy) {
       label: 'Kaleidoscope',
       media: 'microphone',
       settings: [],
-      create: () => createPulseVisualization({ effect: paintKaleidoscope }),
+      create: () => createPulseVisualization({ effect: paintKaleidoscope, sizeScale: .48 }),
     },
   );
   return definitions;
