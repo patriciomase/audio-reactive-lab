@@ -1,5 +1,6 @@
 import './styles.css';
 import { version } from '../package.json';
+import { createAudioFrameSampler } from './audio/audio-frame.js';
 import { createVisualizationRuntime } from './runtime/visualization-runtime.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 
@@ -43,6 +44,7 @@ let transitionTime = Number.isFinite(Number(savedSettings.transitionTime))
 let carouselTimer = null;
 let modesHideTimer = null;
 let runtime = null;
+const audioFrames = createAudioFrameSampler();
 let equalizerText = typeof savedSettings.equalizerText === 'string'
   ? savedSettings.equalizerText.slice(0, 24) : 'LIVE';
 if (equalizerText === 'DJ PATO') equalizerText = 'LIVE';
@@ -181,21 +183,6 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function bands() {
-  if (!audio) return {
-    low: 0.16 + Math.sin(frame * 0.018) * 0.08,
-    mid: 0.12 + Math.sin(frame * 0.027 + 2) * 0.06,
-    high: 0.08 + Math.sin(frame * 0.043 + 4) * 0.04,
-    level: 0.14,
-  };
-  audio.analyser.getByteFrequencyData(audio.frequency);
-  audio.analyser.getByteTimeDomainData(audio.waveform);
-  const low = average(audio.frequency, 1, 12) * sensitivity;
-  const mid = average(audio.frequency, 12, 80) * sensitivity;
-  const high = average(audio.frequency, 80, 240) * sensitivity;
-  return { low, mid, high, level: (low + mid + high) / 3 };
-}
-
 function color(hue, saturation, lightness, alpha = 1) {
   if (colorMode === 'dark') return `hsla(${220 + hue * .03}, ${Math.min(saturation, 24)}%, ${Math.min(lightness, 28)}%, ${alpha * .72})`;
   if (colorMode === 'colorful') return `hsla(${(hue + frame * .18) % 360}, ${Math.max(saturation, 82)}%, ${Math.max(lightness, 58)}%, ${alpha})`;
@@ -279,16 +266,16 @@ function drawOrbit(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawTerrain(w, h, b) {
+function drawTerrain(w, h, b, audioFrame) {
   const sample = [];
   for (let i = 0; i < TERRAIN_COLUMNS; i += 1) {
     const position = i / (TERRAIN_COLUMNS - 1);
-    if (audio) {
+    if (audioFrame.isLive) {
       const minFrequency = 45;
-      const maxFrequency = Math.min(14000, audio.context.sampleRate / 2);
+      const maxFrequency = Math.min(14000, audioFrame.sampleRate / 2);
       const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, position);
-      const bin = Math.min(audio.frequency.length - 1, Math.round(frequency / (audio.context.sampleRate / audio.analyser.fftSize)));
-      const balanced = Math.pow(audio.frequency[bin] / 255, .82) * (.68 + position * .52);
+      const bin = Math.min(audioFrame.spectrum.length - 1, Math.round(frequency / (audioFrame.sampleRate / audioFrame.fftSize)));
+      const balanced = Math.pow(audioFrame.spectrum[bin] / 255, .82) * (.68 + position * .52);
       sample.push(balanced);
     } else {
       sample.push((Math.max(0, Math.sin(i * .29 + frame * .03)) * .13 + Math.max(0, Math.sin(i * .11 - frame * .018)) * .06) * (.8 + position * .2));
@@ -353,16 +340,16 @@ function drawTerrain(w, h, b) {
   }
 }
 
-function drawTunnel(w, h, b) {
+function drawTunnel(w, h, b, audioFrame) {
   const sample = [];
   for (let i = 0; i < TERRAIN_COLUMNS; i += 1) {
     const position = i / (TERRAIN_COLUMNS - 1);
-    if (audio) {
+    if (audioFrame.isLive) {
       const minFrequency = 45;
-      const maxFrequency = Math.min(14000, audio.context.sampleRate / 2);
+      const maxFrequency = Math.min(14000, audioFrame.sampleRate / 2);
       const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, position);
-      const bin = Math.min(audio.frequency.length - 1, Math.round(frequency / (audio.context.sampleRate / audio.analyser.fftSize)));
-      sample.push(Math.pow(audio.frequency[bin] / 255, .82) * (.68 + position * .52));
+      const bin = Math.min(audioFrame.spectrum.length - 1, Math.round(frequency / (audioFrame.sampleRate / audioFrame.fftSize)));
+      sample.push(Math.pow(audioFrame.spectrum[bin] / 255, .82) * (.68 + position * .52));
     } else {
       sample.push((Math.max(0, Math.sin(i * .29 + frame * .03)) * .13 + Math.max(0, Math.sin(i * .11 - frame * .018)) * .06) * (.8 + position * .2));
     }
@@ -435,13 +422,13 @@ function drawTunnel(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawPrism(w, h, b) {
+function drawPrism(w, h, b, audioFrame) {
   ctx.globalCompositeOperation = 'lighter';
   for (let layer = 0; layer < 9; layer += 1) {
     ctx.beginPath();
     for (let x = 0; x <= w; x += 5) {
-      const index = Math.floor((x / w) * ((audio?.waveform.length ?? 1024) - 1));
-      const live = audio ? (audio.waveform[index] - 128) / 128 : Math.sin(x * .012 + frame * .03) * .12;
+      const index = Math.floor((x / w) * Math.max(0, audioFrame.waveform.length - 1));
+      const live = audioFrame.isLive ? (audioFrame.waveform[index] - 128) / 128 : Math.sin(x * .012 + frame * .03) * .12;
       const y = h / 2 + live * (110 + b.level * 260) + Math.sin(x * .006 + layer + frame * .008) * (24 + b.mid * 50);
       if (x === 0) ctx.moveTo(x, y + layer * 3); else ctx.lineTo(x, y + layer * 3);
     }
@@ -501,23 +488,23 @@ function createTangle(w, h) {
   });
 }
 
-function tangleEnergy(dot) {
-  if (!audio) return .08 + Math.max(0, Math.sin(frame * (.012 + dot.frequencyPosition * .035) + dot.hue)) * .3;
+function tangleEnergy(dot, audioFrame) {
+  if (!audioFrame.isLive) return .08 + Math.max(0, Math.sin(frame * (.012 + dot.frequencyPosition * .035) + dot.hue)) * .3;
   const minFrequency = 45;
-  const maxFrequency = Math.min(15000, audio.context.sampleRate / 2);
+  const maxFrequency = Math.min(15000, audioFrame.sampleRate / 2);
   const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, dot.frequencyPosition);
-  const bin = frequency / (audio.context.sampleRate / audio.analyser.fftSize);
+  const bin = frequency / (audioFrame.sampleRate / audioFrame.fftSize);
   const radius = 2 + Math.round(dot.frequencyPosition * 5);
-  return average(audio.frequency, Math.max(1, Math.round(bin) - radius), Math.round(bin) + radius + 1)
+  return average(audioFrame.spectrum, Math.max(1, Math.round(bin) - radius), Math.round(bin) + radius + 1)
     * sensitivity * (.8 + dot.frequencyPosition * .65);
 }
 
-function drawTangle(w, h, b) {
+function drawTangle(w, h, b, audioFrame) {
   if (!tangleDots.length) createTangle(w, h);
   drawStarfield(w, h, b, .48);
   const margin = 22;
   tangleDots.forEach((dot) => {
-    const live = Math.min(1.25, tangleEnergy(dot));
+    const live = Math.min(1.25, tangleEnergy(dot, audioFrame));
     dot.energy += (live - dot.energy) * (live > dot.energy ? .18 : .055);
     const acceleration = 1 + dot.energy * (1.4 + dot.frequencyPosition);
     dot.x += dot.vx * acceleration;
@@ -586,7 +573,7 @@ function drawTangle(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawOverlap(w, h, b) {
+function drawOverlap(w, h, b, audioFrame) {
   if (!squares.length) createSquares(w, h);
   const speed = 1 + b.mid * 1.8;
   const now = performance.now();
@@ -612,16 +599,16 @@ function drawOverlap(w, h, b) {
   }
   const boxes = squares.map((square) => {
     let frequencyEnergy;
-    if (audio) {
+    if (audioFrame.isLive) {
       // Spread the figures logarithmically across the audible spectrum. A small
       // neighbourhood keeps individual bins from flickering without making the
       // whole group move as one again.
       const minFrequency = 45;
-      const maxFrequency = Math.min(15000, audio.context.sampleRate / 2);
+      const maxFrequency = Math.min(15000, audioFrame.sampleRate / 2);
       const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, square.frequencyPosition);
-      const centreBin = frequency / (audio.context.sampleRate / audio.analyser.fftSize);
+      const centreBin = frequency / (audioFrame.sampleRate / audioFrame.fftSize);
       const radius = 2 + Math.round(square.frequencyPosition * 5);
-      frequencyEnergy = average(audio.frequency, Math.max(1, Math.round(centreBin) - radius), Math.round(centreBin) + radius + 1)
+      frequencyEnergy = average(audioFrame.spectrum, Math.max(1, Math.round(centreBin) - radius), Math.round(centreBin) + radius + 1)
         * sensitivity * (.78 + square.frequencyPosition * .72);
     } else {
       const demoRate = .011 + square.frequencyPosition * .035;
@@ -755,7 +742,7 @@ function drawStarfield(w, h, b, intensity = 1, reactive = true) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawUniverse(w, h, b) {
+function drawUniverse(w, h, b, audioFrame) {
   const cx = w * .5;
   const cy = h * .5;
   const shortEdge = Math.min(w, h);
@@ -763,7 +750,7 @@ function drawUniverse(w, h, b) {
 
   ctx.globalCompositeOperation = 'lighter';
   const transient = b.low > .3 && b.low - universePreviousLow > .025;
-  const demoGlitch = !audio && frame - universeLastGlitch > 720;
+  const demoGlitch = !audioFrame.isLive && frame - universeLastGlitch > 720;
   if ((transient && frame - universeLastGlitch > 260 && Math.random() < .34) || demoGlitch) {
     universeReverseUntil = frame + 18 + Math.floor(Math.random() * 18);
     universeLastGlitch = frame;
@@ -941,7 +928,7 @@ function drawTrace(w, h, b) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function drawEqualizer(w, h, b) {
+function drawEqualizer(w, h, b, audioFrame) {
   const cx = w * .5;
   const cy = h * .5;
   const barCount = w < 700 ? 24 : 38;
@@ -958,11 +945,11 @@ function drawEqualizer(w, h, b) {
     const position = i / Math.max(1, barCount - 1);
     const frequencyPosition = 1 - position;
     let raw;
-    if (audio) {
+    if (audioFrame.isLive) {
       // Bass lives at the outer edges; progressively higher bands move inward.
-      const bin = Math.min(audio.frequency.length - 1, Math.floor(2 + Math.pow(frequencyPosition, 1.72) * 230));
+      const bin = Math.min(audioFrame.spectrum.length - 1, Math.floor(2 + Math.pow(frequencyPosition, 1.72) * 230));
       const radius = 2 + Math.floor(frequencyPosition * 4);
-      raw = average(audio.frequency, Math.max(1, bin - radius), bin + radius + 1) * sensitivity;
+      raw = average(audioFrame.spectrum, Math.max(1, bin - radius), bin + radius + 1) * sensitivity;
     } else {
       const wave = Math.sin(frame * (.045 + position * .025) + i * .83) * .5 + .5;
       const pulse = Math.max(0, Math.sin(frame * .052 + position * 3.2));
@@ -1113,7 +1100,7 @@ function launchGlyphColorWave(b) {
   glyphLastColorWave = frame;
 }
 
-function drawGlyph(w, h, b) {
+function drawGlyph(w, h, b, audioFrame) {
   if (!glyphCanvas.width || Math.abs(glyphCanvas.width / glyphCanvas.height - w / h) > .01) {
     resetGlyphCanvas(w, h, true);
   }
@@ -1125,7 +1112,7 @@ function drawGlyph(w, h, b) {
   glyphCtx.restore();
 
   glyphLowAverage += (b.low - glyphLowAverage) * .025;
-  const beat = (audio
+  const beat = (audioFrame.isLive
     ? b.low > Math.max(.16, glyphLowAverage * 1.27) && b.low - glyphPreviousLow > .012
     : frame % 52 === 0)
     && frame - glyphLastBeat > 14;
@@ -1140,7 +1127,7 @@ function drawGlyph(w, h, b) {
   }
   glyphPreviousLow = b.low;
 
-  if (frame >= glyphNextWave && (!audio || b.level > .075)) {
+  if (frame >= glyphNextWave && (!audioFrame.isLive || b.level > .075)) {
     if (frame - glyphLastColorWave > 36) launchGlyphColorWave(b);
     glyphNextWave = frame + Math.max(42, 68 - Math.floor(Math.min(1, b.level) * 25));
   }
@@ -1193,14 +1180,20 @@ function drawGlyph(w, h, b) {
 
 function draw() {
   frame += 1;
-  const b = bands();
+  const audioFrame = audioFrames.sample({
+    analyser: audio?.analyser,
+    sampleRate: audio?.context.sampleRate,
+    sensitivity,
+    index: frame,
+    time: performance.now(),
+  });
   drawBackground(innerWidth, innerHeight);
   runtime?.render({
     ctx,
     width: innerWidth,
     height: innerHeight,
-    bands: b,
-    audio,
+    bands: audioFrame.bands,
+    audioFrame,
     frame,
     color,
   });
@@ -1246,7 +1239,7 @@ async function startAudio() {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = .78;
     source.connect(analyser);
-    audio = { context, stream, analyser, frequency: new Uint8Array(analyser.frequencyBinCount), waveform: new Uint8Array(analyser.fftSize), hasCamera: false };
+    audio = { context, stream, analyser, hasCamera: false };
     if (needsCamera) await enableTraceCamera();
     status.classList.add('live');
     statusText.textContent = audio.hasCamera ? 'MIC + CAMERA LIVE' : 'MIC LIVE';
@@ -1289,7 +1282,7 @@ function resetOverlapState() {
 function legacyActivation(drawVisualization, { reset = () => {}, resize: onResize } = {}) {
   reset();
   return {
-    render: ({ width, height, bands: currentBands }) => drawVisualization(width, height, currentBands),
+    render: ({ width, height, bands: currentBands, audioFrame }) => drawVisualization(width, height, currentBands, audioFrame),
     resize: onResize,
     dispose: reset,
   };

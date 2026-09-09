@@ -41,3 +41,7 @@ A setting declared by one visualization, such as Equalizer center text. The acti
 ### Failed activation
 
 A visualization activation that throws during entry, rendering, or resize. The visualization runtime disposes it, keeps the animation loop alive, shows a small error, and advances the carousel when carousel mode is active.
+
+### Audio frame
+
+The single sound snapshot sampled for one animation tick. It contains normalized frequency bands, spectrum and waveform buffers, timing, sample-rate metadata, and whether the listening session is live. Every visualization rendered during that tick receives the same audio frame.

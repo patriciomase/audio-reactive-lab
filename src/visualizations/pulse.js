@@ -10,17 +10,17 @@ export function createPulseVisualization({ effect = null } = {}) {
   let lastTrailX = x;
   let lastTrailY = y;
 
-  function update({ width, height, bands, audio, frame }) {
+  function update({ width, height, bands, audioFrame, frame }) {
     const diameter = width * (width <= 700 ? 1 / 3 : 1 / 12);
     const radius = diameter * .5;
     const amplitude = Math.min(width, height) * (.018 + Math.min(1, bands.level) * .09);
     let waveX;
     let waveY;
-    if (audio) {
-      const xIndex = (frame * 17) % audio.waveform.length;
-      const yIndex = (xIndex + Math.floor(audio.waveform.length * .37)) % audio.waveform.length;
-      const sampleX = (audio.waveform[xIndex] - 128) / 128;
-      const sampleY = (audio.waveform[yIndex] - 128) / 128;
+    if (audioFrame.isLive) {
+      const xIndex = (frame * 17) % audioFrame.waveform.length;
+      const yIndex = (xIndex + Math.floor(audioFrame.waveform.length * .37)) % audioFrame.waveform.length;
+      const sampleX = (audioFrame.waveform[xIndex] - 128) / 128;
+      const sampleY = (audioFrame.waveform[yIndex] - 128) / 128;
       waveX = clamp(sampleX * 6 + Math.sin(frame * .71) * bands.high * .42 + Math.sin(frame * .29) * bands.low * .24, -1, 1);
       waveY = clamp(sampleY * 6 + Math.sin(frame * .83 + 1.4) * bands.mid * .38 + Math.sin(frame * .37) * bands.low * .22, -1, 1);
     } else {
