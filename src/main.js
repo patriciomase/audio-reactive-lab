@@ -6,6 +6,7 @@ import { createBeatZoomEffect } from './effects/breathing-zoom.js';
 import { createVisualizationPlayer } from './runtime/visualization-player.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 import { createGlyphField } from './visualizations/glyph-field.js';
+import { OVERLAP_MORPH_DURATION, overlapMorphDelay } from './visualizations/overlap-morph.js';
 import { createTraceVisualization } from './visualizations/trace.js';
 
 const canvas = document.querySelector('canvas');
@@ -111,7 +112,7 @@ let overlapShape = {
   progress: 1,
   started: 0,
   duration: 0,
-  nextAt: performance.now() + 120000 + Math.random() * 60000,
+  nextAt: performance.now() + overlapMorphDelay(),
 };
 
 const TERRAIN_COLUMNS = 72;
@@ -537,7 +538,7 @@ function drawOverlap(w, h, b, audioFrame) {
     overlapShape.from = overlapShape.current;
     overlapShape.target = shapes[Math.floor(Math.random() * shapes.length)];
     overlapShape.started = now;
-    overlapShape.duration = 1000;
+    overlapShape.duration = OVERLAP_MORPH_DURATION;
     overlapShape.progress = 0;
     overlapShape.nextAt = Infinity;
   }
@@ -549,7 +550,7 @@ function drawOverlap(w, h, b, audioFrame) {
       overlapShape.from = overlapShape.current;
       overlapShape.progress = 1;
       overlapShape.started = 0;
-      overlapShape.nextAt = now + 120000 + Math.random() * 60000;
+      overlapShape.nextAt = now + overlapMorphDelay();
     }
   }
   const boxes = squares.map((square) => {
@@ -1109,7 +1110,7 @@ function resetOverlapState() {
     progress: 1,
     started: 0,
     duration: 0,
-    nextAt: performance.now() + 120000 + Math.random() * 60000,
+    nextAt: performance.now() + overlapMorphDelay(),
   };
 }
 
