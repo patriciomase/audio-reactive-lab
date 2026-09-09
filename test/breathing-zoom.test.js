@@ -1,15 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { breathingZoomScale, paintBreathingZoom } from '../src/effects/breathing-zoom.js';
+import { createBeatZoomController, createBeatZoomEffect } from '../src/effects/breathing-zoom.js';
 
-test('breathes from the normal viewport into an audio-reactive close-up', () => {
-  const quiet = Array.from({ length: 600 }, (_, frame) => breathingZoomScale({ frame, bands: { level: 0 } }));
-  const loud = Array.from({ length: 600 }, (_, frame) => breathingZoomScale({ frame, bands: { level: 1 } }));
+test('stays still without a beat and gives bass transients a subtle release envelope', () => {
+  const zoom = createBeatZoomController();
+  const quiet = Array.from({ length: 30 }, (_, frame) => zoom.advance({
+    frame,
+    bands: { low: .12, level: .12 },
+    audioFrame: { isLive: true },
+  }));
+  const beat = zoom.advance({ frame: 30, bands: { low: .8, level: .4 }, audioFrame: { isLive: true } });
+  const release = Array.from({ length: 30 }, (_, offset) => zoom.advance({
+    frame: 31 + offset,
+    bands: { low: .12, level: .12 },
+    audioFrame: { isLive: true },
+  }));
 
-  assert.ok(Math.min(...quiet) >= 1);
-  assert.ok(Math.max(...quiet) >= 1.079);
-  assert.ok(Math.max(...loud) >= 1.159);
-  assert.ok(Math.max(...loud) > Math.max(...quiet));
+  assert.deepEqual(new Set(quiet), new Set([1]));
+  assert.ok(beat > 1.015 && beat <= 1.035);
+  assert.ok(release.every((scale, index) => index === 0 || scale <= release[index - 1]));
+  assert.ok(release.at(-1) < 1.001);
 });
 
 test('zooms around the viewport center and restores the canvas', () => {
@@ -21,11 +31,13 @@ test('zooms around the viewport center and restores the canvas', () => {
     scale: (x, y) => operations.push(['scale', x, y]),
   };
 
-  paintBreathingZoom({
+  const paintBeatZoom = createBeatZoomEffect();
+  paintBeatZoom({
     ctx,
     width: 1000,
     height: 600,
-    bands: { level: .5 },
+    bands: { low: .8, level: .5 },
+    audioFrame: { isLive: true },
     frame: 80,
     paintSource: () => operations.push(['paint']),
   });

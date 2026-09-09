@@ -2,7 +2,7 @@ import './styles.css';
 import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
-import { paintBreathingZoom } from './effects/breathing-zoom.js';
+import { createBeatZoomEffect } from './effects/breathing-zoom.js';
 import { createVisualizationPlayer } from './runtime/visualization-player.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 import { createGlyphField } from './visualizations/glyph-field.js';
@@ -1122,9 +1122,10 @@ function legacyActivation(drawVisualization, { reset = () => {}, resize: onResiz
   };
 }
 
-function breathingZoomActivation(activation) {
+function beatZoomActivation(activation) {
+  const paintBeatZoom = createBeatZoomEffect();
   return {
-    render: (renderFrame) => paintBreathingZoom({
+    render: (renderFrame) => paintBeatZoom({
       ...renderFrame,
       paintSource: () => activation.render(renderFrame),
     }),
@@ -1152,7 +1153,7 @@ const legacyFactories = {
     terrainAngle = 0; terrainDirection = 1; terrainVelocity = .0045; terrainTargetVelocity = .0045; terrainNextTurnFrame = null;
   }),
   prism: () => legacyActivation(drawPrism),
-  overlap: () => breathingZoomActivation(
+  overlap: () => beatZoomActivation(
     legacyActivation(drawOverlap, { reset: resetOverlapState, resize: resetOverlapState }),
   ),
   universe: () => legacyActivation(drawUniverse, { reset: () => {
@@ -1178,7 +1179,7 @@ const legacyFactories = {
       reset: () => resetGlyphCanvas(),
       resize: () => resetGlyphCanvas(innerWidth, innerHeight, true),
     });
-    return breathingZoomActivation(glyph);
+    return beatZoomActivation(glyph);
   },
 };
 

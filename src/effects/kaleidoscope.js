@@ -1,17 +1,14 @@
-import { paintBreathingZoom } from './breathing-zoom.js';
+import { createBeatZoomEffect } from './breathing-zoom.js';
 
-export function paintKaleidoscope({ ctx, width, height, bands, frame, paintSource }) {
-  paintBreathingZoom({
-    ctx,
-    width,
-    height,
-    bands,
-    frame,
-    paintSource: () => paintKaleidoscopeSlices({ ctx, width, height, bands, frame, paintSource }),
+export function createKaleidoscopeEffect() {
+  const paintBeatZoom = createBeatZoomEffect();
+  return (renderFrame) => paintBeatZoom({
+    ...renderFrame,
+    paintSource: () => paintKaleidoscope(renderFrame),
   });
 }
 
-function paintKaleidoscopeSlices({ ctx, width, height, bands, frame, paintSource }) {
+export function paintKaleidoscope({ ctx, width, height, bands, frame, paintSource }) {
   const cx = width * .5;
   const cy = height * .5;
   const slices = width <= 700 ? 10 : 14;

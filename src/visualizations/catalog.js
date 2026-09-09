@@ -1,4 +1,4 @@
-import { paintKaleidoscope } from '../effects/kaleidoscope.js';
+import { createKaleidoscopeEffect } from '../effects/kaleidoscope.js';
 import { createPulseVisualization } from './pulse.js';
 
 export const visualizationMetadata = [
@@ -33,7 +33,7 @@ export function createVisualizationCatalog(legacy) {
       label: 'Kaleidoscope',
       media: 'microphone',
       settings: [],
-      create: () => createPulseVisualization({ effect: paintKaleidoscope, sizeScale: .48 }),
+      create: () => createPulseVisualization({ effect: createKaleidoscopeEffect(), sizeScale: .48 }),
     },
   );
   return definitions;
