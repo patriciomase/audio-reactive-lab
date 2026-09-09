@@ -437,7 +437,7 @@ function drawPrism(w, h, b) {
       if (x === 0) ctx.moveTo(x, y + layer * 3); else ctx.lineTo(x, y + layer * 3);
     }
     ctx.strokeStyle = color(180 + layer * 22 + frame * .15, 95, 66, .12 + b.level * .3);
-    ctx.lineWidth = 1 + b.high * 3;
+    ctx.lineWidth = 3 + b.high * 9;
     ctx.stroke();
   }
   ctx.globalCompositeOperation = 'source-over';
