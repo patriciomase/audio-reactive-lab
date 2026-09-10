@@ -773,10 +773,11 @@ function drawUniverse(w, h, b, audioFrame) {
   universePreviousLow = b.low;
   const galaxyRotation = universeAngle;
   const galaxyRadius = Math.max(shortEdge * .85, Math.max(w, h) * .68);
-  for (let index = 0; index < 1800; index += 1) {
+  const galaxyStarCount = w < 700 ? 2200 : 2800;
+  for (let index = 0; index < galaxyStarCount; index += 1) {
     const band = index % 3 === 0 ? b.low : index % 3 === 1 ? b.mid : b.high;
     const arm = index % 4;
-    const distance = Math.sqrt((index + .5) / 1800);
+    const distance = Math.sqrt((index + .5) / galaxyStarCount);
     const noise = Math.sin(index * 91.733) * .5 + Math.sin(index * 17.17) * .5;
     const angle = arm * Math.PI / 2 + distance * 7.8 + galaxyRotation + noise * (.12 + distance * .18);
     const radius = distance * galaxyRadius;
@@ -793,6 +794,19 @@ function drawUniverse(w, h, b, audioFrame) {
   }
 
   const coreRadius = shortEdge * .018;
+  const ray = ctx.createLinearGradient(cx, 0, cx, h);
+  const rayAlpha = .22 + Math.min(1, b.low) * .12;
+  ray.addColorStop(0, 'rgba(115, 185, 255, 0)');
+  ray.addColorStop(.42, color(212, 92, 72, rayAlpha * .32));
+  ray.addColorStop(.5, color(198, 88, 82, rayAlpha));
+  ray.addColorStop(.58, color(258, 90, 70, rayAlpha * .32));
+  ray.addColorStop(1, 'rgba(180, 125, 255, 0)');
+  ctx.fillStyle = ray;
+  ctx.shadowColor = color(215 + b.high * 45, 92, 72, .5);
+  ctx.shadowBlur = 18 + b.low * 8;
+  ctx.fillRect(cx - 1, 0, 2, h);
+  ctx.shadowBlur = 0;
+
   const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius * 3.2);
   core.addColorStop(0, 'rgba(255, 246, 220, .82)');
   core.addColorStop(.2, 'rgba(255, 190, 115, .2)');
