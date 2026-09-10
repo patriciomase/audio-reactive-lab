@@ -3,6 +3,7 @@ import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { createBeatZoomEffect } from './effects/breathing-zoom.js';
+import { canvasPixelRatio, createFrameGate } from './rendering/render-performance.js';
 import { createVisualizationPlayer } from './runtime/visualization-player.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
 import { createGlyphField } from './visualizations/glyph-field.js';
@@ -50,6 +51,8 @@ let transitionTime = Number.isFinite(Number(savedSettings.transitionTime))
   : Number(transitionTimeInput.value);
 let modesHideTimer = null;
 let player = null;
+let backgroundGradient = null;
+const equalizerFrameGate = createFrameGate(45);
 const audioFrames = createAudioFrameSampler();
 let equalizerText = typeof savedSettings.equalizerText === 'string'
   ? savedSettings.equalizerText.slice(0, 24) : 'FATBEATS.ORG';
@@ -170,12 +173,16 @@ function average(data, from, to) {
 }
 
 function resize() {
-  const dpr = Math.min(devicePixelRatio, 2);
+  const dpr = canvasPixelRatio(mode, devicePixelRatio);
   canvas.width = innerWidth * dpr;
   canvas.height = innerHeight * dpr;
   canvas.style.width = `${innerWidth}px`;
   canvas.style.height = `${innerHeight}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  backgroundGradient = ctx.createRadialGradient(innerWidth * .5, innerHeight * .48, 0, innerWidth * .5, innerHeight * .48, Math.max(innerWidth, innerHeight) * .75);
+  backgroundGradient.addColorStop(0, '#111118');
+  backgroundGradient.addColorStop(.48, '#08080d');
+  backgroundGradient.addColorStop(1, '#020204');
 }
 
 function color(hue, saturation, lightness, alpha = 1) {
@@ -187,11 +194,7 @@ function color(hue, saturation, lightness, alpha = 1) {
 }
 
 function drawBackground(w, h) {
-  const gradient = ctx.createRadialGradient(w * .5, h * .48, 0, w * .5, h * .48, Math.max(w, h) * .75);
-  gradient.addColorStop(0, '#111118');
-  gradient.addColorStop(.48, '#08080d');
-  gradient.addColorStop(1, '#020204');
-  ctx.fillStyle = gradient;
+  ctx.fillStyle = backgroundGradient;
   ctx.fillRect(0, 0, w, h);
 }
 
@@ -1019,15 +1022,19 @@ function drawGlyph(w, h, b, audioFrame) {
   ctx.stroke();
 }
 
-function draw() {
+function draw(timestamp = performance.now()) {
   frame += 1;
   const audioFrame = audioFrames.sample({
     analyser: audio?.analyser,
     sampleRate: audio?.context.sampleRate,
     sensitivity,
     index: frame,
-    time: performance.now(),
+    time: timestamp,
   });
+  if (mode === 'equalizer' && !equalizerFrameGate.shouldRender(timestamp)) {
+    requestAnimationFrame(draw);
+    return;
+  }
   drawBackground(innerWidth, innerHeight);
   player?.render({
     ctx,
@@ -1205,6 +1212,8 @@ player = createVisualizationPlayer({
   },
   onChange: ({ current: nextDefinition }) => {
     mode = nextDefinition.id;
+    equalizerFrameGate.reset();
+    resize();
     modeSelect.value = mode;
     error.hidden = true;
     app.classList.toggle('equalizer-mode', nextDefinition.settings.includes('equalizerText'));
