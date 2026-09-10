@@ -24,6 +24,8 @@ const autoTransitionInput = document.querySelector('#auto-transition');
 const transitionTimeInput = document.querySelector('#transition-time');
 const transitionTimeValue = document.querySelector('.transition-value');
 const equalizerTextInput = document.querySelector('#equalizer-text');
+const equalizerFontSizeInput = document.querySelector('#equalizer-font-size');
+const equalizerFontSizeValue = document.querySelector('.equalizer-font-size-value');
 const modeSelect = document.querySelector('#visualization-mode');
 document.querySelector('.app-version b').textContent = `v${version}`;
 
@@ -52,6 +54,9 @@ const audioFrames = createAudioFrameSampler();
 let equalizerText = typeof savedSettings.equalizerText === 'string'
   ? savedSettings.equalizerText.slice(0, 24) : 'FATBEATS.ORG';
 if (equalizerText === 'DJ PATO' || equalizerText === 'LIVE') equalizerText = 'FATBEATS.ORG';
+let equalizerFontSize = Number.isFinite(Number(savedSettings.equalizerFontSize))
+  ? Math.max(Number(equalizerFontSizeInput.min), Math.min(Number(equalizerFontSizeInput.max), Number(savedSettings.equalizerFontSize)))
+  : Number(equalizerFontSizeInput.value);
 sensitivityInput.value = sensitivity;
 sensitivityValue.textContent = sensitivity.toFixed(1);
 colorModeInput.value = colorMode;
@@ -59,6 +64,8 @@ autoTransitionInput.checked = autoTransition;
 transitionTimeInput.value = transitionTime;
 transitionTimeValue.textContent = transitionTime;
 equalizerTextInput.value = equalizerText;
+equalizerFontSizeInput.value = equalizerFontSize;
+equalizerFontSizeValue.textContent = equalizerFontSize;
 let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
@@ -138,7 +145,7 @@ app.classList.toggle('equalizer-mode', mode === 'equalizer');
 
 function saveSettings() {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode, autoTransition, transitionTime, equalizerText }));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode, autoTransition, transitionTime, equalizerText, equalizerFontSize }));
   } catch {
     // The visualizer still works when storage is disabled or unavailable.
   }
@@ -838,7 +845,7 @@ function drawEqualizer(w, h, b, audioFrame) {
   }
   equalizerPreviousLow = b.low;
 
-  const fontSize = Math.min(h * .13, w / Math.max(7, equalizerText.length * .69));
+  const fontSize = Math.min(h * .13, w / Math.max(7, equalizerText.length * .69)) * equalizerFontSize / 100;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.globalCompositeOperation = 'lighter';
@@ -1261,6 +1268,11 @@ transitionTimeInput.addEventListener('input', () => {
 });
 equalizerTextInput.addEventListener('input', () => {
   equalizerText = equalizerTextInput.value.slice(0, 24).toUpperCase();
+  saveSettings();
+});
+equalizerFontSizeInput.addEventListener('input', () => {
+  equalizerFontSize = Number(equalizerFontSizeInput.value);
+  equalizerFontSizeValue.textContent = equalizerFontSize;
   saveSettings();
 });
 modeSelect.addEventListener('change', () => switchVisualization(modeSelect.value, { reason: 'user' }));
