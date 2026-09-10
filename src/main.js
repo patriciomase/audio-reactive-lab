@@ -189,10 +189,10 @@ function resize() {
   canvas.style.width = `${innerWidth}px`;
   canvas.style.height = `${innerHeight}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  backgroundGradient = ctx.createRadialGradient(innerWidth * .5, innerHeight * .48, 0, innerWidth * .5, innerHeight * .48, Math.max(innerWidth, innerHeight) * .75);
-  backgroundGradient.addColorStop(0, '#111118');
-  backgroundGradient.addColorStop(.48, '#08080d');
-  backgroundGradient.addColorStop(1, '#020204');
+  backgroundGradient = ctx.createRadialGradient(innerWidth * .5, innerHeight * .48, 0, innerWidth * .5, innerHeight * .48, Math.hypot(innerWidth, innerHeight) * .56);
+  backgroundGradient.addColorStop(0, '#09090e');
+  backgroundGradient.addColorStop(.58, '#060609');
+  backgroundGradient.addColorStop(1, '#020203');
 }
 
 function color(hue, saturation, lightness, alpha = 1) {
