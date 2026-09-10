@@ -37,6 +37,10 @@ h1 { margin: 0 0 30px; font-size: clamp(48px, 7vw, 112px); font-weight: 300; let
 .creator-link:hover, .creator-link:focus-visible { color: #fff; }
 nav { position: fixed; z-index: 3; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 5px; border: 1px solid rgba(255,255,255,.13); border-radius: 14px; background: rgba(12,11,17,.72); backdrop-filter: blur(20px); box-shadow: 0 15px 50px rgba(0,0,0,.45); transition: opacity .9s ease, transform .9s ease; }
 nav select { width: 210px; cursor: pointer; color: #f5f2ff; background: rgba(255,255,255,.08); border: 0; border-radius: 9px; padding: 11px 34px 11px 14px; outline: none; font: 11px DM Mono, monospace; letter-spacing: .04em; }
+.debug-panel { position: fixed; z-index: 6; left: 34px; bottom: 24px; width: 280px; padding: 14px 16px; display: grid; gap: 7px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; color: #777482; background: rgba(3,3,7,.68); box-shadow: 0 14px 45px rgba(0,0,0,.3); backdrop-filter: blur(14px); font: 9px DM Mono, monospace; letter-spacing: .08em; pointer-events: none; }
+.debug-panel[hidden] { display: none; }
+.debug-panel div { display: flex; justify-content: space-between; gap: 12px; }
+.debug-panel b { color: #d8d4df; font-weight: 400; text-align: right; }
 .immersive header { opacity: 0; transform: translateY(-12px); pointer-events: none; transition-delay: 3s; }
 .immersive .intro { opacity: 0; transform: translateY(-50%); pointer-events: none; }
 .immersive nav { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
@@ -59,5 +63,6 @@ nav select { width: 210px; cursor: pointer; color: #f5f2ff; background: rgba(255
   .meter { width: calc(100vw - 32px); }
   nav { width: 210px; max-width: calc(100vw - 32px); }
   nav select { width: 100%; }
+  .debug-panel { left: 16px; bottom: 88px; width: min(280px, calc(100vw - 32px)); }
 }
 @media (prefers-reduced-motion: reduce) { .status.live i { animation: none; } }

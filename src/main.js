@@ -3,6 +3,7 @@ import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { createBeatZoomEffect } from './effects/breathing-zoom.js';
+import { createLoadMonitor } from './rendering/load-monitor.js';
 import { canvasPixelRatio, createFrameGate } from './rendering/render-performance.js';
 import { createVisualizationPlayer } from './runtime/visualization-player.js';
 import { createVisualizationCatalog, visualizationMetadata } from './visualizations/catalog.js';
@@ -27,6 +28,9 @@ const transitionTimeValue = document.querySelector('.transition-value');
 const equalizerTextInput = document.querySelector('#equalizer-text');
 const equalizerFontSizeInput = document.querySelector('#equalizer-font-size');
 const equalizerFontSizeValue = document.querySelector('.equalizer-font-size-value');
+const debugModeInput = document.querySelector('#debug-mode');
+const debugPanel = document.querySelector('.debug-panel');
+const debugFields = Object.fromEntries([...debugPanel.querySelectorAll('[data-debug]')].map((field) => [field.dataset.debug, field]));
 const modeSelect = document.querySelector('#visualization-mode');
 document.querySelector('.app-version b').textContent = `v${version}`;
 
@@ -53,6 +57,7 @@ let modesHideTimer = null;
 let player = null;
 let backgroundGradient = null;
 const equalizerFrameGate = createFrameGate(45);
+const loadMonitor = createLoadMonitor();
 const audioFrames = createAudioFrameSampler();
 let equalizerText = typeof savedSettings.equalizerText === 'string'
   ? savedSettings.equalizerText.slice(0, 24) : 'FATBEATS.ORG';
@@ -60,6 +65,7 @@ if (equalizerText === 'DJ PATO' || equalizerText === 'LIVE') equalizerText = 'FA
 let equalizerFontSize = Number.isFinite(Number(savedSettings.equalizerFontSize))
   ? Math.max(Number(equalizerFontSizeInput.min), Math.min(Number(equalizerFontSizeInput.max), Number(savedSettings.equalizerFontSize)))
   : Number(equalizerFontSizeInput.value);
+let debugMode = savedSettings.debugMode === true;
 sensitivityInput.value = sensitivity;
 sensitivityValue.textContent = sensitivity.toFixed(1);
 colorModeInput.value = colorMode;
@@ -69,6 +75,8 @@ transitionTimeValue.textContent = transitionTime;
 equalizerTextInput.value = equalizerText;
 equalizerFontSizeInput.value = equalizerFontSize;
 equalizerFontSizeValue.textContent = equalizerFontSize;
+debugModeInput.checked = debugMode;
+debugPanel.hidden = !debugMode;
 let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
@@ -148,7 +156,7 @@ app.classList.toggle('equalizer-mode', mode === 'equalizer');
 
 function saveSettings() {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode, autoTransition, transitionTime, equalizerText, equalizerFontSize }));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity, colorMode, mode, autoTransition, transitionTime, equalizerText, equalizerFontSize, debugMode }));
   } catch {
     // The visualizer still works when storage is disabled or unavailable.
   }
@@ -196,6 +204,20 @@ function color(hue, saturation, lightness, alpha = 1) {
 function drawBackground(w, h) {
   ctx.fillStyle = backgroundGradient;
   ctx.fillRect(0, 0, w, h);
+}
+
+function updateDebugPanel(sample) {
+  const targetFps = mode === 'equalizer' ? 45 : 60;
+  const pixels = canvas.width * canvas.height;
+  const heapBytes = performance.memory?.usedJSHeapSize;
+  debugFields.mode.textContent = mode.toUpperCase();
+  debugFields.fps.textContent = `${sample.fps.toFixed(0)} FPS`;
+  debugFields['draw-average'].textContent = `${sample.averageDrawMs.toFixed(2)} MS`;
+  debugFields['draw-maximum'].textContent = `${sample.maximumDrawMs.toFixed(2)} MS`;
+  debugFields.load.textContent = `${(sample.averageDrawMs / (1000 / targetFps) * 100).toFixed(1)}%`;
+  debugFields.canvas.textContent = `${canvas.width}×${canvas.height} · ${(pixels / 1e6).toFixed(1)} MP · ${canvasPixelRatio(mode, devicePixelRatio).toFixed(2)} DPR`;
+  debugFields.surface.textContent = `~${(pixels * 4 / 1048576).toFixed(1)} MB`;
+  debugFields.heap.textContent = Number.isFinite(heapBytes) ? `${(heapBytes / 1048576).toFixed(1)} MB` : 'N/A';
 }
 
 function drawOrbit(w, h, b) {
@@ -1035,6 +1057,7 @@ function draw(timestamp = performance.now()) {
     requestAnimationFrame(draw);
     return;
   }
+  const drawStartedAt = debugMode ? performance.now() : 0;
   drawBackground(innerWidth, innerHeight);
   player?.render({
     ctx,
@@ -1045,6 +1068,10 @@ function draw(timestamp = performance.now()) {
     frame,
     color,
   });
+  if (debugMode) {
+    const sample = loadMonitor.record(timestamp, performance.now() - drawStartedAt);
+    if (sample) updateDebugPanel(sample);
+  }
   requestAnimationFrame(draw);
 }
 
@@ -1213,6 +1240,7 @@ player = createVisualizationPlayer({
   onChange: ({ current: nextDefinition }) => {
     mode = nextDefinition.id;
     equalizerFrameGate.reset();
+    loadMonitor.reset();
     resize();
     modeSelect.value = mode;
     error.hidden = true;
@@ -1282,6 +1310,12 @@ equalizerTextInput.addEventListener('input', () => {
 equalizerFontSizeInput.addEventListener('input', () => {
   equalizerFontSize = Number(equalizerFontSizeInput.value);
   equalizerFontSizeValue.textContent = equalizerFontSize;
+  saveSettings();
+});
+debugModeInput.addEventListener('change', () => {
+  debugMode = debugModeInput.checked;
+  debugPanel.hidden = !debugMode;
+  loadMonitor.reset();
   saveSettings();
 });
 modeSelect.addEventListener('change', () => switchVisualization(modeSelect.value, { reason: 'user' }));

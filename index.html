@@ -47,6 +47,10 @@
           <label for="auto-transition">AUTO TRANSITION</label>
           <input id="auto-transition" type="checkbox" />
         </div>
+        <div class="setting toggle-setting">
+          <label for="debug-mode">DEBUG MODE</label>
+          <input id="debug-mode" type="checkbox" />
+        </div>
         <div class="setting">
           <label for="transition-time">TRANSITION TIME <b><span class="transition-value">30</span>S</b></label>
           <input id="transition-time" type="range" min="10" max="180" step="5" value="30" />
@@ -57,6 +61,16 @@
       <nav aria-label="Visual modes">
         <select id="visualization-mode" aria-label="Visualization"></select>
       </nav>
+      <aside class="debug-panel" aria-label="Performance debug information" hidden>
+        <div><span>VIS</span><b data-debug="mode">—</b></div>
+        <div><span>RENDER</span><b data-debug="fps">—</b></div>
+        <div><span>DRAW AVG</span><b data-debug="draw-average">—</b></div>
+        <div><span>DRAW MAX</span><b data-debug="draw-maximum">—</b></div>
+        <div><span>JS BUDGET</span><b data-debug="load">—</b></div>
+        <div><span>CANVAS</span><b data-debug="canvas">—</b></div>
+        <div><span>SURFACE</span><b data-debug="surface">—</b></div>
+        <div><span>JS HEAP</span><b data-debug="heap">—</b></div>
+      </aside>
     </main>
     <script type="module" src="/src/main.js"></script>
   </body>
