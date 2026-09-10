@@ -1,6 +1,7 @@
 import './styles.css';
 import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
+import { createAdaptiveNoiseGate } from './audio/equalizer-noise-gate.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { createBeatZoomEffect } from './effects/breathing-zoom.js';
 import { createLoadMonitor } from './rendering/load-monitor.js';
@@ -104,6 +105,7 @@ const tunnelVelocity = { x: .0018, y: -.0013, z: .0011 };
 const tunnelTargetVelocity = { ...tunnelVelocity };
 let tunnelNextDirection = 0;
 let equalizerEnergies = [];
+const equalizerNoiseGate = createAdaptiveNoiseGate();
 let equalizerTextLayers = [];
 let equalizerPreviousLow = 0;
 let equalizerLowAverage = .12;
@@ -823,6 +825,7 @@ function drawEqualizer(w, h, b, audioFrame) {
       const bin = Math.min(audioFrame.spectrum.length - 1, Math.floor(2 + Math.pow(frequencyPosition, 1.72) * 230));
       const radius = 2 + Math.floor(frequencyPosition * 4);
       raw = average(audioFrame.spectrum, Math.max(1, bin - radius), bin + radius + 1) * sensitivity;
+      raw = equalizerNoiseGate.sample(i, raw, { learn: b.level < .16 });
     } else {
       const wave = Math.sin(frame * (.045 + position * .025) + i * .83) * .5 + .5;
       const pulse = Math.max(0, Math.sin(frame * .052 + position * 3.2));
@@ -1213,7 +1216,7 @@ const legacyFactories = {
     paintBackdrop: ({ width, height, bands: currentBands }) => drawStarfield(width, height, currentBands, .14),
   }),
   equalizer: () => legacyActivation(drawEqualizer, { reset: () => {
-    equalizerEnergies = []; equalizerTextLayers = []; equalizerPreviousLow = 0; equalizerLowAverage = .12; equalizerLastBeat = -100;
+    equalizerEnergies = []; equalizerNoiseGate.reset(); equalizerTextLayers = []; equalizerPreviousLow = 0; equalizerLowAverage = .12; equalizerLastBeat = -100;
   } }),
   glyph: () => {
     const glyph = legacyActivation(drawGlyph, {
