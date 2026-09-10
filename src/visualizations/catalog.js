@@ -27,7 +27,7 @@ export function createVisualizationCatalog(legacy) {
   }));
 
   definitions.push(
-    { id: 'pulse', label: 'Pulse', media: 'microphone', settings: [], create: () => createPulseVisualization() },
+    { id: 'pulse', label: 'Pulse', media: 'microphone', settings: [], create: () => createPulseVisualization({ emitEchoes: true }) },
     {
       id: 'kaleidoscope',
       label: 'Kaleidoscope',

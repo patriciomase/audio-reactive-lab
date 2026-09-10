@@ -1,14 +1,17 @@
+import { createPulseEchoes } from './pulse-echoes.js';
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-export function createPulseVisualization({ effect = null, sizeScale = 1 } = {}) {
+export function createPulseVisualization({ effect = null, sizeScale = 1, emitEchoes = false } = {}) {
   let x = innerWidth * .5;
   let y = innerHeight * .5;
   let hue = 230;
   let trails = [];
   let lastTrailX = x;
   let lastTrailY = y;
+  const pulseEchoes = createPulseEchoes();
 
   function update({ width, height, bands, audioFrame, frame }) {
     const diameter = width * (width <= 700 ? 1 / 3 : 1 / 12) * sizeScale;
@@ -30,6 +33,7 @@ export function createPulseVisualization({ effect = null, sizeScale = 1 } = {}) 
     x += (width * .5 + waveX * amplitude - x) * .62;
     y += (height * .5 + waveY * amplitude - y) * .62;
     hue += (205 + bands.low * 150 + bands.mid * 210 + bands.high * 290 - hue) * .08;
+    if (emitEchoes) pulseEchoes.update({ time: audioFrame.time, x, y, radius, hue, width, height });
 
     const trailDistance = Math.hypot(x - lastTrailX, y - lastTrailY);
     if (trailDistance > Math.max(2, radius * .1)) {
@@ -44,6 +48,12 @@ export function createPulseVisualization({ effect = null, sizeScale = 1 } = {}) 
   }
 
   function paint(target, pulse, color) {
+    pulseEchoes.items.forEach((echo) => {
+      target.fillStyle = color(echo.hue, 90, 58, echo.alpha);
+      target.beginPath();
+      target.arc(echo.x, echo.y, echo.radius, 0, Math.PI * 2);
+      target.fill();
+    });
     trails.forEach((trail) => {
       target.fillStyle = color(trail.hue, 90, 58, trail.alpha);
       target.beginPath();
@@ -65,6 +75,7 @@ export function createPulseVisualization({ effect = null, sizeScale = 1 } = {}) 
     },
     dispose() {
       trails = [];
+      pulseEchoes.reset();
     },
   };
 }
