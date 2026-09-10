@@ -6,7 +6,7 @@ function frame(time) {
   return { time, x: 50, y: 50, radius: 10, hue: 220, width: 100, height: 100 };
 }
 
-test('emits a translucent, enlarged pulse copy after 1.5 to 4.5 seconds', () => {
+test('emits a half-opacity pulse copy at the parent size after 1.5 to 4.5 seconds', () => {
   const echoes = createPulseEchoes({ random: () => 0 });
   echoes.update(frame(0));
   echoes.update(frame(1499));
@@ -14,8 +14,8 @@ test('emits a translucent, enlarged pulse copy after 1.5 to 4.5 seconds', () => 
 
   echoes.update(frame(1500));
   assert.equal(echoes.items.length, 1);
-  assert.equal(echoes.items[0].alpha, .3);
-  assert.equal(echoes.items[0].radius, 11);
+  assert.equal(echoes.items[0].alpha, .15);
+  assert.equal(echoes.items[0].radius, 10);
 });
 
 test('moves echoes along a constant straight trajectory', () => {
@@ -46,6 +46,17 @@ test('fades echoes while moving toward the edge', () => {
 
   assert.ok(echoes.items[0].alpha < initialAlpha);
   assert.ok(echoes.items[0].alpha > 0);
+});
+
+test('grows echoes as they travel toward the edge', () => {
+  const echoes = createPulseEchoes({ random: () => 0 });
+  echoes.update(frame(0));
+  echoes.update(frame(1500));
+  const initialRadius = echoes.items[0].radius;
+  echoes.update(frame(2500));
+
+  assert.ok(echoes.items[0].radius > initialRadius);
+  assert.ok(echoes.items[0].radius <= initialRadius * 1.5);
 });
 
 test('removes echoes after the full circle leaves the viewport', () => {
