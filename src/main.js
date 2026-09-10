@@ -50,8 +50,8 @@ let modesHideTimer = null;
 let player = null;
 const audioFrames = createAudioFrameSampler();
 let equalizerText = typeof savedSettings.equalizerText === 'string'
-  ? savedSettings.equalizerText.slice(0, 24) : 'LIVE';
-if (equalizerText === 'DJ PATO') equalizerText = 'LIVE';
+  ? savedSettings.equalizerText.slice(0, 24) : 'FATBEATS.ORG';
+if (equalizerText === 'DJ PATO' || equalizerText === 'LIVE') equalizerText = 'FATBEATS.ORG';
 sensitivityInput.value = sensitivity;
 sensitivityValue.textContent = sensitivity.toFixed(1);
 colorModeInput.value = colorMode;
