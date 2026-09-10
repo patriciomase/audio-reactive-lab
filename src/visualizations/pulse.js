@@ -4,13 +4,16 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-export function createPulseVisualization({ effect = null, sizeScale = 1, emitEchoes = false } = {}) {
+export function createPulseVisualization({ effect = null, sizeScale = 1, emitEchoes = false, emitRipples = false } = {}) {
   let x = innerWidth * .5;
   let y = innerHeight * .5;
   let hue = 230;
   let trails = [];
   let lastTrailX = x;
   let lastTrailY = y;
+  let ripples = [];
+  let lastRippleAt = null;
+  let nextRippleDelay = 700;
   const pulseEchoes = createPulseEchoes();
 
   function update({ width, height, bands, audioFrame, frame }) {
@@ -34,6 +37,16 @@ export function createPulseVisualization({ effect = null, sizeScale = 1, emitEch
     y += (height * .5 + waveY * amplitude - y) * .62;
     hue += (205 + bands.low * 150 + bands.mid * 210 + bands.high * 290 - hue) * .08;
     if (emitEchoes) pulseEchoes.update({ time: audioFrame.time, x, y, radius, hue, width, height });
+    if (emitRipples) {
+      if (lastRippleAt === null) lastRippleAt = audioFrame.time - nextRippleDelay;
+      if (audioFrame.time - lastRippleAt >= nextRippleDelay) {
+        const energy = Math.min(1, bands.low * .7 + bands.level * .3);
+        ripples.push({ x, y, startRadius: radius, hue, bornAt: audioFrame.time, duration: 2100 + Math.random() * 700, energy });
+        lastRippleAt = audioFrame.time;
+        nextRippleDelay = 520 + Math.random() * 430 - energy * 140;
+      }
+      ripples = ripples.filter((ripple) => audioFrame.time - ripple.bornAt < ripple.duration);
+    }
 
     const trailDistance = Math.hypot(x - lastTrailX, y - lastTrailY);
     if (trailDistance > Math.max(2, radius * .1)) {
@@ -44,10 +57,19 @@ export function createPulseVisualization({ effect = null, sizeScale = 1, emitEch
     }
     trails = trails.filter((trail) => trail.alpha > .012);
     trails.forEach((trail) => { trail.alpha *= .74; });
-    return { radius };
+    return { radius, time: audioFrame.time };
   }
 
   function paint(target, pulse, color) {
+    ripples.forEach((ripple) => {
+      const progress = Math.min(1, Math.max(0, (pulse.time - ripple.bornAt) / ripple.duration));
+      const eased = 1 - Math.pow(1 - progress, 2);
+      target.strokeStyle = color(ripple.hue, 86, 68, (1 - progress) * (.11 + ripple.energy * .09));
+      target.lineWidth = Math.max(.65, ripple.startRadius * .035 * (1 - progress * .55));
+      target.beginPath();
+      target.arc(ripple.x, ripple.y, ripple.startRadius * (1 + eased * 3.4), 0, Math.PI * 2);
+      target.stroke();
+    });
     pulseEchoes.items.forEach((echo) => {
       target.fillStyle = color(echo.hue, 90, 58, echo.alpha);
       target.beginPath();
@@ -75,6 +97,9 @@ export function createPulseVisualization({ effect = null, sizeScale = 1, emitEch
     },
     dispose() {
       trails = [];
+      ripples = [];
+      lastRippleAt = null;
+      nextRippleDelay = 700;
       pulseEchoes.reset();
     },
   };
