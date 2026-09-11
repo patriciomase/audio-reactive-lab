@@ -1,6 +1,7 @@
 import './styles.css';
 import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
+import { createAudioSession } from './audio/audio-session.js';
 import { createAdaptiveNoiseGate } from './audio/equalizer-noise-gate.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { createBeatZoomEffect } from './effects/breathing-zoom.js';
@@ -1144,16 +1145,10 @@ async function startAudio() {
   try {
     error.hidden = true;
     const needsCamera = mode === 'trace';
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    audio = await createAudioSession({
+      mediaDevices: navigator.mediaDevices,
+      AudioContextClass: window.AudioContext || window.webkitAudioContext,
     });
-    const context = new AudioContext();
-    const source = context.createMediaStreamSource(stream);
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = .78;
-    source.connect(analyser);
-    audio = { context, stream, analyser, hasCamera: false };
     if (needsCamera) await enableTraceCamera();
     status.classList.add('live');
     statusText.textContent = audio.hasCamera ? 'MIC + CAMERA LIVE' : 'MIC LIVE';
@@ -1161,9 +1156,11 @@ async function startAudio() {
     listenButton.textContent = 'Stop listening';
     app.classList.add('immersive');
     window.umami?.track('microphone-enabled');
-  } catch {
+  } catch (cause) {
+    audio = null;
     error.textContent = 'Microphone access was blocked. Allow it in your browser and try again.';
     error.hidden = false;
+    console.error('Microphone startup failed:', cause);
   }
 }
 
