@@ -1,5 +1,8 @@
 export const microphoneConstraints = {
-  audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+  // Let the device select its supported capture pipeline. Some Android audio
+  // stacks report a live track but emit zero samples when all processing is
+  // explicitly disabled.
+  audio: true,
 };
 
 export async function createAudioSession({ mediaDevices, AudioContextClass }) {

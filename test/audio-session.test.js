@@ -38,6 +38,10 @@ test('resumes Web Audio during the initiating gesture before microphone permissi
   assert.deepEqual(calls, ['resume', 'permission', 'source → analyser', 'analyser → silent output', 'silent output → destination']);
 });
 
+test('uses the device default capture pipeline for Android compatibility', () => {
+  assert.deepEqual(microphoneConstraints, { audio: true });
+});
+
 test('retries resume after permission when a mobile browser remains suspended', async () => {
   let resumes = 0;
   class AudioContextStub {
