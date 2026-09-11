@@ -9,12 +9,14 @@ test('resumes Web Audio during the initiating gesture before microphone permissi
   class AudioContextStub {
     state = 'suspended';
     sampleRate = 48000;
+    destination = { id: 'destination' };
     resume() { calls.push('resume'); this.state = 'running'; return Promise.resolve(); }
     createMediaStreamSource(value) {
       assert.equal(value, stream);
-      return { connect: () => calls.push('connect') };
+      return { connect: () => calls.push('source → analyser') };
     }
-    createAnalyser() { return {}; }
+    createAnalyser() { return { connect: () => calls.push('analyser → silent output') }; }
+    createGain() { return { gain: {}, connect: () => calls.push('silent output → destination') }; }
   }
   const mediaDevices = {
     getUserMedia(constraints) {
@@ -32,20 +34,23 @@ test('resumes Web Audio during the initiating gesture before microphone permissi
   assert.equal(session.context.state, 'running');
   assert.equal(session.analyser.fftSize, 2048);
   assert.equal(session.analyser.smoothingTimeConstant, .78);
-  assert.deepEqual(calls, ['resume', 'permission', 'connect']);
+  assert.equal(session.silentOutput.gain.value, 0);
+  assert.deepEqual(calls, ['resume', 'permission', 'source → analyser', 'analyser → silent output', 'silent output → destination']);
 });
 
 test('retries resume after permission when a mobile browser remains suspended', async () => {
   let resumes = 0;
   class AudioContextStub {
     state = 'suspended';
+    destination = {};
     resume() {
       resumes += 1;
       if (resumes === 2) this.state = 'running';
       return Promise.resolve();
     }
     createMediaStreamSource() { return { connect() {} }; }
-    createAnalyser() { return {}; }
+    createAnalyser() { return { connect() {} }; }
+    createGain() { return { gain: {}, connect() {} }; }
   }
 
   const session = await createAudioSession({

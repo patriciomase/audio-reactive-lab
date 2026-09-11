@@ -21,7 +21,13 @@ export async function createAudioSession({ mediaDevices, AudioContextClass }) {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = .78;
     source.connect(analyser);
-    return { context, stream, analyser, source, hasCamera: false };
+    // Keep the analysis graph active on mobile Chromium without playing the
+    // microphone through the speakers and creating acoustic feedback.
+    const silentOutput = context.createGain();
+    silentOutput.gain.value = 0;
+    analyser.connect(silentOutput);
+    silentOutput.connect(context.destination);
+    return { context, stream, analyser, source, silentOutput, hasCamera: false };
   } catch (cause) {
     stream?.getTracks().forEach((track) => track.stop());
     await context.close().catch(() => {});

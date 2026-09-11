@@ -209,7 +209,7 @@ function drawBackground(w, h) {
   ctx.fillRect(0, 0, w, h);
 }
 
-function updateDebugPanel(sample) {
+function updateDebugPanel(sample, audioFrame) {
   const targetFps = mode === 'equalizer' ? 45 : 60;
   const pixels = canvas.width * canvas.height;
   const heapBytes = performance.memory?.usedJSHeapSize;
@@ -218,6 +218,14 @@ function updateDebugPanel(sample) {
   debugFields['draw-average'].textContent = `${sample.averageDrawMs.toFixed(2)} MS`;
   debugFields['draw-maximum'].textContent = `${sample.maximumDrawMs.toFixed(2)} MS`;
   debugFields.load.textContent = `${(sample.averageDrawMs / (1000 / targetFps) * 100).toFixed(1)}%`;
+  const microphoneTrack = audio?.stream.getAudioTracks()[0];
+  let signalPeak = 0;
+  for (let index = 0; index < audioFrame.spectrum.length; index += 1) signalPeak = Math.max(signalPeak, audioFrame.spectrum[index]);
+  debugFields['audio-context'].textContent = audio?.context.state?.toUpperCase() ?? 'DEMO';
+  debugFields['mic-track'].textContent = microphoneTrack
+    ? `${microphoneTrack.readyState.toUpperCase()}${microphoneTrack.muted ? ' · MUTED' : ''}${microphoneTrack.enabled ? '' : ' · DISABLED'}`
+    : '—';
+  debugFields.signal.textContent = audio ? `${signalPeak} / 255` : '—';
   debugFields.canvas.textContent = `${canvas.width}×${canvas.height} · ${(pixels / 1e6).toFixed(1)} MP · ${canvasPixelRatio(mode, devicePixelRatio).toFixed(2)} DPR`;
   debugFields.surface.textContent = `~${(pixels * 4 / 1048576).toFixed(1)} MB`;
   debugFields.heap.textContent = Number.isFinite(heapBytes) ? `${(heapBytes / 1048576).toFixed(1)} MB` : 'N/A';
@@ -1110,7 +1118,7 @@ function draw(timestamp = performance.now()) {
   });
   if (debugMode) {
     const sample = loadMonitor.record(timestamp, performance.now() - drawStartedAt);
-    if (sample) updateDebugPanel(sample);
+    if (sample) updateDebugPanel(sample, audioFrame);
   }
   requestAnimationFrame(draw);
 }
