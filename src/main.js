@@ -1,7 +1,7 @@
 import './styles.css';
 import { version } from '../package.json';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
-import { createAudioSession } from './audio/audio-session.js';
+import { createAudioSession, isAndroidDevice } from './audio/audio-session.js';
 import { createAdaptiveNoiseGate } from './audio/equalizer-noise-gate.js';
 import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { createBeatZoomEffect } from './effects/breathing-zoom.js';
@@ -1156,6 +1156,7 @@ async function startAudio() {
     audio = await createAudioSession({
       mediaDevices: navigator.mediaDevices,
       AudioContextClass: window.AudioContext || window.webkitAudioContext,
+      extendedInputRange: isAndroidDevice(navigator),
     });
     if (needsCamera) await enableTraceCamera();
     status.classList.add('live');

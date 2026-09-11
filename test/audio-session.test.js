@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAudioSession, microphoneConstraints } from '../src/audio/audio-session.js';
+import { createAudioSession, isAndroidDevice, microphoneConstraints } from '../src/audio/audio-session.js';
 
 test('resumes Web Audio during the initiating gesture before microphone permission resolves', async () => {
   const calls = [];
@@ -34,12 +34,38 @@ test('resumes Web Audio during the initiating gesture before microphone permissi
   assert.equal(session.context.state, 'running');
   assert.equal(session.analyser.fftSize, 2048);
   assert.equal(session.analyser.smoothingTimeConstant, .78);
+  assert.equal(session.analyser.minDecibels, -100);
+  assert.equal(session.analyser.maxDecibels, -20);
   assert.equal(session.silentOutput.gain.value, 0);
   assert.deepEqual(calls, ['resume', 'permission', 'source → analyser', 'analyser → silent output', 'silent output → destination']);
 });
 
 test('uses the device default capture pipeline for Android compatibility', () => {
   assert.deepEqual(microphoneConstraints, { audio: true });
+});
+
+test('targets Android without changing iPhone or desktop input ranges', () => {
+  assert.equal(isAndroidDevice({ userAgent: 'Mozilla/5.0 (Linux; Android 15; Mobile)' }), true);
+  assert.equal(isAndroidDevice({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)' }), false);
+  assert.equal(isAndroidDevice({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)' }), false);
+});
+
+test('widens the analyser range only for Android microphones', async () => {
+  class AudioContextStub {
+    state = 'running';
+    destination = {};
+    createMediaStreamSource() { return { connect() {} }; }
+    createAnalyser() { return { connect() {} }; }
+    createGain() { return { gain: {}, connect() {} }; }
+  }
+  const session = await createAudioSession({
+    mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) },
+    AudioContextClass: AudioContextStub,
+    extendedInputRange: true,
+  });
+
+  assert.equal(session.analyser.minDecibels, -115);
+  assert.equal(session.analyser.maxDecibels, -20);
 });
 
 test('retries resume after permission when a mobile browser remains suspended', async () => {

@@ -5,7 +5,11 @@ export const microphoneConstraints = {
   audio: true,
 };
 
-export async function createAudioSession({ mediaDevices, AudioContextClass }) {
+export function isAndroidDevice({ userAgent = '' } = {}) {
+  return /Android/i.test(userAgent);
+}
+
+export async function createAudioSession({ mediaDevices, AudioContextClass, extendedInputRange = false }) {
   if (!mediaDevices?.getUserMedia) throw new Error('Microphone capture is unavailable in this browser.');
   if (!AudioContextClass) throw new Error('Web Audio is unavailable in this browser.');
 
@@ -23,6 +27,10 @@ export async function createAudioSession({ mediaDevices, AudioContextClass }) {
     const analyser = context.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = .78;
+    // Some Android microphones sit below the default -100 dB floor at room
+    // level. Preserve quiet detail there without changing other devices.
+    analyser.minDecibels = extendedInputRange ? -115 : -100;
+    analyser.maxDecibels = -20;
     source.connect(analyser);
     // Keep the analysis graph active on mobile Chromium without playing the
     // microphone through the speakers and creating acoustic feedback.
