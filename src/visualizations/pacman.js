@@ -24,7 +24,12 @@ export function createPacmanVisualization({
 } = {}) {
   const pacmanFrames = PACMAN_FRAMES.map((source) => createSprite(source, createImage));
   const ghosts = GHOSTS.map((source) => createSprite(source, createImage));
+  const pelletSprites = [
+    createSprite('assets/pacman/pellet.svg', createImage),
+    createSprite('assets/pacman/power-pellet.svg', createImage),
+  ];
   let travelers = [];
+  let pellets = [];
   let viewportWidth = 0;
   let viewportHeight = 0;
   let previousLow = 0;
@@ -57,6 +62,21 @@ export function createPacmanVisualization({
       resetTraveler(traveler, width, height, true);
       return traveler;
     });
+    const pelletCount = width < 700 ? 10 : Math.max(14, Math.min(28, Math.round(width / 70)));
+    pellets = Array.from({ length: pelletCount }, () => {
+      const angle = random() * Math.PI * 2;
+      const power = random() < .16;
+      return {
+        x: random() * width,
+        y: random() * height,
+        vx: Math.cos(angle) * (.12 + random() * .48),
+        vy: Math.sin(angle) * (.12 + random() * .48),
+        size: power ? 13 + random() * 13 : 6 + random() * 7,
+        power,
+        phase: random() * Math.PI * 2,
+        alpha: .28 + random() * .48,
+      };
+    });
     viewportWidth = width;
     viewportHeight = height;
   }
@@ -75,7 +95,25 @@ export function createPacmanVisualization({
       }
       previousLow = bands.low;
 
-      travelers.forEach((traveler, index) => {
+      pellets.forEach((pellet) => {
+        const drift = 1 + Math.min(1, bands.high) * .65;
+        pellet.x += pellet.vx * drift;
+        pellet.y += pellet.vy * drift;
+        if (pellet.x < -pellet.size) pellet.x = width + pellet.size;
+        if (pellet.x > width + pellet.size) pellet.x = -pellet.size;
+        if (pellet.y < -pellet.size) pellet.y = height + pellet.size;
+        if (pellet.y > height + pellet.size) pellet.y = -pellet.size;
+        const image = pelletSprites[pellet.power ? 1 : 0];
+        if (!image.complete || image.naturalWidth === 0) return;
+        const pulse = pellet.power ? 1 + Math.sin(frame * .045 + pellet.phase) * .16 + bands.low * .18 : 1;
+        const size = pellet.size * pulse;
+        ctx.save();
+        ctx.globalAlpha = pellet.alpha;
+        ctx.drawImage(image, pellet.x - size / 2, pellet.y - size / 2, size, size);
+        ctx.restore();
+      });
+
+      travelers.forEach((traveler) => {
         traveler.x += traveler.speed * traveler.direction * audioSpeed;
         if (traveler.direction > 0 && traveler.x - traveler.size > width
           || traveler.direction < 0 && traveler.x + traveler.size < 0) {
@@ -108,17 +146,12 @@ export function createPacmanVisualization({
         ctx.drawImage(image, -size / 2, -size / 2, size, size);
         ctx.restore();
 
-        if (traveler.kind === 'pacman' && index % 2 === 0) {
-          ctx.beginPath();
-          ctx.fillStyle = `rgba(255, 228, 191, ${.16 + bands.high * .18})`;
-          ctx.arc(traveler.x - traveler.direction * size * .78, traveler.y + bob + jump, Math.max(1.5, size * .035), 0, Math.PI * 2);
-          ctx.fill();
-        }
       });
     },
     resize({ width, height }) { populate(width, height); },
     dispose() {
       travelers = [];
+      pellets = [];
       previousLow = 0;
       lowAverage = .12;
       lastBeat = -100;
