@@ -30,7 +30,6 @@ export function createPacmanVisualization({
   let previousLow = 0;
   let lowAverage = .12;
   let lastBeat = -100;
-  let jumpProgress = 1;
 
   function resetTraveler(traveler, width, height, initial = false) {
     const direction = random() < .76 ? 1 : -1;
@@ -46,6 +45,9 @@ export function createPacmanVisualization({
     traveler.phase = random() * Math.PI * 2;
     traveler.bob = 2 + random() * 12;
     traveler.alpha = .5 + random() * .45;
+    traveler.jumpDelay = Math.floor(random() * 8);
+    traveler.jumpDuration = 23 + Math.floor(random() * 10);
+    traveler.jumpStrength = .55 + random() * .75;
   }
 
   function populate(width, height) {
@@ -69,12 +71,9 @@ export function createPacmanVisualization({
         : frame % 52 === 0)
         && frame - lastBeat > 16;
       if (beat) {
-        jumpProgress = 0;
         lastBeat = frame;
       }
       previousLow = bands.low;
-      jumpProgress = Math.min(1, jumpProgress + 1 / 30);
-      const jumpArc = Math.sin(jumpProgress * Math.PI);
 
       travelers.forEach((traveler, index) => {
         traveler.x += traveler.speed * traveler.direction * audioSpeed;
@@ -85,7 +84,13 @@ export function createPacmanVisualization({
 
         const bob = Math.sin(frame * (.018 + traveler.speed * .008) + traveler.phase)
           * traveler.bob * (1 + bands.high * .7);
-        const jump = -jumpArc * (12 + traveler.size * .22) * (1 + Math.min(1, bands.low) * .35);
+        const jumpElapsed = frame - lastBeat - traveler.jumpDelay;
+        const jumpProgress = Math.max(0, Math.min(1, jumpElapsed / traveler.jumpDuration));
+        const isJumping = jumpElapsed >= 0 && jumpElapsed <= traveler.jumpDuration;
+        const jump = isJumping
+          ? -Math.sin(jumpProgress * Math.PI) * (12 + traveler.size * .22) * traveler.jumpStrength
+            * (1 + Math.min(1, bands.low) * .35)
+          : 0;
         const pulse = 1 + Math.sin(frame * .025 + traveler.phase) * .018 + bands.low * .055;
         const size = traveler.size * pulse;
         const mouthFrameDuration = Math.max(5, Math.round((7 - Math.min(3, Math.floor(bands.level * 4))) * 1.5));
@@ -117,7 +122,6 @@ export function createPacmanVisualization({
       previousLow = 0;
       lowAverage = .12;
       lastBeat = -100;
-      jumpProgress = 1;
     },
   };
 }
