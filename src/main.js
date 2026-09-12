@@ -1,9 +1,9 @@
 import './styles.css';
 import { version } from '../package.json';
+import { createEngagementTracker } from './analytics/engagement.js';
 import { createAudioFrameSampler } from './audio/audio-frame.js';
 import { createAudioSession, isAndroidDevice } from './audio/audio-session.js';
 import { createAdaptiveNoiseGate } from './audio/equalizer-noise-gate.js';
-import { createSpectrumHistory } from './audio/spectrum-history.js';
 import { createBeatZoomEffect } from './effects/breathing-zoom.js';
 import { createLoadMonitor } from './rendering/load-monitor.js';
 import { canvasPixelRatio, createFrameGate } from './rendering/render-performance.js';
@@ -61,6 +61,13 @@ let backgroundGradient = null;
 const equalizerFrameGate = createFrameGate(45);
 const loadMonitor = createLoadMonitor();
 const audioFrames = createAudioFrameSampler();
+const engagementTracker = createEngagementTracker({
+  analytics: {
+    track: (...args) => window.umami?.track(...args),
+    identify: (data) => window.umami?.identify?.(data),
+  },
+});
+const engagementHeartbeat = setInterval(() => engagementTracker.checkpoint(), 30000);
 let equalizerText = typeof savedSettings.equalizerText === 'string'
   ? savedSettings.equalizerText.slice(0, 24) : 'FATBEATS.ORG';
 if (equalizerText === 'DJ PATO' || equalizerText === 'LIVE') equalizerText = 'FATBEATS.ORG';
@@ -82,29 +89,13 @@ debugPanel.hidden = !debugMode;
 let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
-let reverbWaves = [];
-let previousLow = 0;
-let orbitAngle = 0;
-let orbitDirection = 1;
-let reverseUntil = 0;
-let lastWaveFrame = -100;
 let squares = [];
-let terrainAngle = 0;
-let terrainDirection = 1;
-let terrainVelocity = .0045;
-let terrainTargetVelocity = .0045;
-let terrainNextTurnFrame = null;
 let universeAngle = 0;
 let universeVelocity = .00052;
 let universePreviousLow = 0;
 let universeReverseUntil = 0;
 let universeLastGlitch = -600;
 let tangleDots = [];
-let tunnelGrid = [];
-const tunnelRotation = { x: .48, y: -.32, z: .12 };
-const tunnelVelocity = { x: .0018, y: -.0013, z: .0011 };
-const tunnelTargetVelocity = { ...tunnelVelocity };
-let tunnelNextDirection = 0;
 let equalizerEnergies = [];
 const equalizerNoiseGate = createAdaptiveNoiseGate();
 let equalizerTextLayers = [];
@@ -135,8 +126,6 @@ let overlapShape = {
   nextAt: performance.now() + overlapMorphDelay(),
 };
 
-const TERRAIN_COLUMNS = 72;
-const TERRAIN_ROWS = 88;
 const universeStars = Array.from({ length: 340 }, () => ({
   x: Math.random() * 2 - 1,
   y: Math.random() * 2 - 1,
@@ -229,195 +218,6 @@ function updateDebugPanel(sample, audioFrame) {
   debugFields.canvas.textContent = `${canvas.width}×${canvas.height} · ${(pixels / 1e6).toFixed(1)} MP · ${canvasPixelRatio(mode, devicePixelRatio).toFixed(2)} DPR`;
   debugFields.surface.textContent = `~${(pixels * 4 / 1048576).toFixed(1)} MB`;
   debugFields.heap.textContent = Number.isFinite(heapBytes) ? `${(heapBytes / 1048576).toFixed(1)} MB` : 'N/A';
-}
-
-function drawOrbit(w, h, b) {
-  const cx = w / 2, cy = h / 2;
-  const transient = b.low > .38 && b.low - previousLow > .045;
-  if (transient) reverseUntil = frame + 34;
-  const targetDirection = frame < reverseUntil ? -1 : 1;
-  orbitDirection += (targetDirection - orbitDirection) * (targetDirection < 0 ? .24 : .1);
-  orbitAngle += .0064 * orbitDirection;
-  previousLow = b.low;
-
-  const points = [];
-  for (let ring = 0; ring < 5; ring += 1) {
-    const energy = ring < 2 ? b.low : ring < 4 ? b.mid : b.high;
-    const count = 28 + ring * 12;
-    const radius = 80 + ring * 46 + energy * 65;
-    for (let i = 0; i < count; i += 1) {
-      const a = (i / count) * Math.PI * 2 + orbitAngle * (1 + ring * .18) * (ring % 2 ? -1 : 1);
-      const wobble = Math.sin(a * (3 + ring) + frame * .018) * (8 + energy * 24);
-      const x = cx + Math.cos(a) * (radius + wobble);
-      const y = cy + Math.sin(a) * (radius + wobble) * .72;
-      points.push({
-        x: x - cx,
-        y: y - cy,
-        size: .9 + ring * .18 + (Math.sin(i * 2.37 + ring) + 1) * .16 + energy * 4.1,
-        hue: 255 + ring * 24 + b.high * 80,
-        lightness: 65 + energy * 20,
-        alpha: .24 + energy * .62,
-      });
-    }
-  }
-
-  const waveInterval = Math.max(54, 128 - b.level * 90);
-  if ((transient || frame - lastWaveFrame > waveInterval) && frame - lastWaveFrame > 28) {
-    reverbWaves.push({
-      points: points.map((point) => ({ ...point })),
-      scale: 1.02,
-      speed: .0073 + b.low * .006,
-      alpha: Math.min(.78, .52 + b.level * .5),
-      maxRadius: 310 + b.low * 65,
-    });
-    lastWaveFrame = frame;
-  }
-
-  ctx.globalCompositeOperation = 'lighter';
-  const viewportRadius = Math.hypot(w, h) * .78;
-  reverbWaves = reverbWaves.filter((wave) => wave.maxRadius * wave.scale < viewportRadius);
-  reverbWaves.forEach((wave) => {
-    wave.scale += wave.speed;
-    wave.speed *= 1.002;
-    const progress = wave.maxRadius * wave.scale / viewportRadius;
-    const edgeFade = progress < .72 ? 1 : Math.max(0, 1 - (progress - .72) / .28);
-    wave.points.forEach((point) => {
-      ctx.beginPath();
-      ctx.fillStyle = color(point.hue, 90, point.lightness, point.alpha * wave.alpha * edgeFade);
-      ctx.arc(cx + point.x * wave.scale, cy + point.y * wave.scale, Math.max(.6, point.size * (.55 + wave.alpha * edgeFade * .35)), 0, Math.PI * 2);
-      ctx.fill();
-    });
-  });
-  points.forEach((point) => {
-    ctx.beginPath();
-    ctx.fillStyle = color(point.hue, 90, point.lightness, point.alpha);
-    ctx.arc(cx + point.x, cy + point.y, point.size, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-function drawTerrain(w, h, b, spectrumHistory) {
-  if (terrainNextTurnFrame === null) terrainNextTurnFrame = frame + 420 + Math.random() * 540;
-  if (frame >= terrainNextTurnFrame && terrainTargetVelocity !== 0) {
-    terrainTargetVelocity = 0;
-    terrainNextTurnFrame = Infinity;
-  }
-  terrainVelocity += (terrainTargetVelocity - terrainVelocity) * .025;
-  if (terrainTargetVelocity === 0 && Math.abs(terrainVelocity) < .00006) {
-    terrainDirection *= -1;
-    terrainTargetVelocity = .0045 * terrainDirection;
-    terrainNextTurnFrame = frame + 420 + Math.random() * 720;
-  }
-  terrainAngle += terrainVelocity;
-
-  const yaw = terrainAngle;
-  const pitch = .82 + b.low * .08;
-  const roll = b.high * .025;
-  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
-  const cosX = Math.cos(pitch), sinX = Math.sin(pitch);
-  const cosZ = Math.cos(roll), sinZ = Math.sin(roll);
-  const focal = Math.max(w, h) * 1.15;
-  const project = (x, y, z) => {
-    const x1 = x * cosY - z * sinY;
-    const z1 = x * sinY + z * cosY;
-    const y2 = y * cosX - z1 * sinX;
-    const z2 = y * sinX + z1 * cosX;
-    const x3 = x1 * cosZ - y2 * sinZ;
-    const y3 = x1 * sinZ + y2 * cosZ;
-    const scale = focal / (focal + z2);
-    return { x: w / 2 + x3 * scale, y: h * .56 + y3 * scale };
-  };
-
-  const side = Math.min(w, h) * .9;
-  const grid = spectrumHistory.map((row, z) => Array.from(row, (value, i) => project(
-    (i / (row.length - 1) - .5) * side,
-    -value * side * (.64 + b.low * .24),
-    (z / (TERRAIN_ROWS - 1) - .5) * side,
-  )));
-
-  ctx.lineWidth = 1.05;
-  grid.forEach((row, z) => {
-    ctx.beginPath();
-    row.forEach((point, i) => i === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-    ctx.strokeStyle = color(190 + z * 4 + b.high * 80, 90, 64, .82 - z / 45);
-    ctx.stroke();
-  });
-  for (let column = 0; column < TERRAIN_COLUMNS; column += 2) {
-    ctx.beginPath();
-    grid.forEach((row, z) => {
-      const point = row[column];
-      if (z === 0) ctx.moveTo(point.x, point.y); else ctx.lineTo(point.x, point.y);
-    });
-    ctx.strokeStyle = color(225 + column * 2 + b.high * 70, 84, 60, .24);
-    ctx.stroke();
-  }
-}
-
-function drawTunnel(w, h, b, tunnelHistory) {
-  if (frame >= tunnelNextDirection) {
-    const randomVelocity = () => (Math.random() * 2 - 1) * (.0022 + Math.random() * .0018);
-    tunnelTargetVelocity.x = randomVelocity();
-    tunnelTargetVelocity.y = randomVelocity();
-    tunnelTargetVelocity.z = randomVelocity();
-    tunnelNextDirection = frame + 300 + Math.random() * 540;
-  }
-  ['x', 'y', 'z'].forEach((axis) => {
-    tunnelVelocity[axis] += (tunnelTargetVelocity[axis] - tunnelVelocity[axis]) * .008;
-    tunnelRotation[axis] += tunnelVelocity[axis];
-  });
-
-  const cosX = Math.cos(tunnelRotation.x), sinX = Math.sin(tunnelRotation.x);
-  const cosY = Math.cos(tunnelRotation.y), sinY = Math.sin(tunnelRotation.y);
-  const cosZ = Math.cos(tunnelRotation.z), sinZ = Math.sin(tunnelRotation.z);
-  const focal = Math.max(w, h) * 1.4;
-  const project = (x, y, z, target) => {
-    const y1 = y * cosX - z * sinX;
-    const z1 = y * sinX + z * cosX;
-    const x2 = x * cosY + z1 * sinY;
-    const z2 = -x * sinY + z1 * cosY;
-    const x3 = x2 * cosZ - y1 * sinZ;
-    const y3 = x2 * sinZ + y1 * cosZ;
-    const scale = focal / (focal + z2);
-    target.x = w / 2 + x3 * scale;
-    target.y = h * .52 + y3 * scale;
-  };
-
-  const side = Math.min(w, h) * .68;
-  const baseRadius = side * .255;
-  while (tunnelGrid.length < tunnelHistory.length) {
-    tunnelGrid.push(Array.from({ length: TERRAIN_COLUMNS }, () => ({ x: 0, y: 0 })));
-  }
-  tunnelGrid.length = tunnelHistory.length;
-  tunnelHistory.forEach((row, rowIndex) => row.forEach((value, column) => {
-    const angle = column / (TERRAIN_COLUMNS - 1) * Math.PI * 2;
-    const radius = baseRadius + value * side * (.32 + b.low * .12);
-    project(
-      Math.cos(angle) * radius,
-      Math.sin(angle) * radius,
-      (rowIndex / (TERRAIN_ROWS - 1) - .5) * side,
-      tunnelGrid[rowIndex][column],
-    );
-  }));
-  const grid = tunnelGrid;
-
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.lineWidth = 1;
-  grid.forEach((ring, rowIndex) => {
-    ctx.beginPath();
-    ring.forEach((point, column) => column === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-    ctx.closePath();
-    const depth = rowIndex / Math.max(1, TERRAIN_ROWS - 1);
-    ctx.strokeStyle = color(180 + rowIndex * 3 + b.high * 80, 90, 64, .16 + Math.sin(depth * Math.PI) * .58);
-    ctx.stroke();
-  });
-  for (let column = 0; column < TERRAIN_COLUMNS; column += 3) {
-    ctx.beginPath();
-    grid.forEach((ring, rowIndex) => rowIndex === 0 ? ctx.moveTo(ring[column].x, ring[column].y) : ctx.lineTo(ring[column].x, ring[column].y));
-    ctx.strokeStyle = color(220 + column * 2 + b.mid * 70, 86, 62, .22 + b.high * .18);
-    ctx.stroke();
-  }
-  ctx.globalCompositeOperation = 'source-over';
 }
 
 function createSquares(w, h) {
@@ -1125,7 +925,7 @@ async function startAudio() {
     listenButton.classList.add('secondary');
     listenButton.textContent = 'Stop listening';
     app.classList.add('immersive');
-    window.umami?.track('microphone-enabled');
+    engagementTracker.setMicrophoneEnabled(true);
   } catch (cause) {
     audio = null;
     error.textContent = 'Microphone access was blocked. Allow it in your browser and try again.';
@@ -1135,6 +935,7 @@ async function startAudio() {
 }
 
 function stopAudio() {
+  engagementTracker.setMicrophoneEnabled(false);
   audio.stream.getTracks().forEach((track) => track.stop());
   audio.context.close();
   audio = null;
@@ -1181,24 +982,7 @@ function beatZoomActivation(activation) {
   };
 }
 
-function spectrumHistoryActivation(drawVisualization, reset) {
-  reset();
-  const history = createSpectrumHistory({ columns: TERRAIN_COLUMNS, rows: TERRAIN_ROWS });
-  return {
-    render: ({ width, height, bands: currentBands, audioFrame }) => {
-      drawVisualization(width, height, currentBands, history.advance(audioFrame));
-    },
-    dispose: reset,
-  };
-}
-
 const legacyFactories = {
-  orbit: () => legacyActivation(drawOrbit, { reset: () => {
-    reverbWaves = []; previousLow = 0; orbitAngle = 0; orbitDirection = 1; reverseUntil = 0; lastWaveFrame = -100;
-  } }),
-  terrain: () => spectrumHistoryActivation(drawTerrain, () => {
-    terrainAngle = 0; terrainDirection = 1; terrainVelocity = .0045; terrainTargetVelocity = .0045; terrainNextTurnFrame = null;
-  }),
   overlap: () => beatZoomActivation(
     legacyActivation(drawOverlap, { reset: resetOverlapState, resize: resetOverlapState }),
   ),
@@ -1206,12 +990,6 @@ const legacyFactories = {
     universeAngle = 0; universeVelocity = .00052; universePreviousLow = 0; universeReverseUntil = 0; universeLastGlitch = -600;
   } }),
   tangle: () => legacyActivation(drawTangle, { reset: () => { tangleDots = []; }, resize: () => { tangleDots = []; } }),
-  tunnel: () => spectrumHistoryActivation(drawTunnel, () => {
-    tunnelGrid = []; tunnelRotation.x = .48; tunnelRotation.y = -.32; tunnelRotation.z = .12;
-    tunnelVelocity.x = .0018; tunnelVelocity.y = -.0013; tunnelVelocity.z = .0011;
-    tunnelTargetVelocity.x = tunnelVelocity.x; tunnelTargetVelocity.y = tunnelVelocity.y; tunnelTargetVelocity.z = tunnelVelocity.z;
-    tunnelNextDirection = 0;
-  }),
   trace: () => createTraceVisualization({
     video: traceVideo,
     resolveRgb: ({ hue }) => traceRgb(hue),
@@ -1242,7 +1020,7 @@ player = createVisualizationPlayer({
       if (!await enableTraceCamera()) throw new Error('Camera access was blocked.');
     }
   },
-  onChange: ({ current: nextDefinition }) => {
+  onChange: ({ current: nextDefinition, meta }) => {
     mode = nextDefinition.id;
     equalizerFrameGate.reset();
     loadMonitor.reset();
@@ -1255,7 +1033,7 @@ player = createVisualizationPlayer({
     history.replaceState({}, '', url);
     saveSettings();
     updateListenLabel();
-    window.umami?.track('visualization-changed', { visualization: mode });
+    engagementTracker.visualizationChanged(mode, meta.reason ?? 'unknown');
   },
   onError: ({ error: cause, definition, phase }) => {
     modeSelect.value = mode;
@@ -1276,11 +1054,13 @@ settingsToggle.addEventListener('click', () => {
   settingsToggle.setAttribute('aria-expanded', String(isOpen));
 });
 document.addEventListener('pointerdown', (event) => {
+  engagementTracker.recordInteraction(event.pointerType === 'touch' ? 'touch' : 'pointer');
   if (!app.classList.contains('settings-open') || event.target.closest('.meter, .settings-toggle')) return;
   app.classList.remove('settings-open');
   settingsToggle.setAttribute('aria-expanded', 'false');
 });
 document.addEventListener('keydown', (event) => {
+  engagementTracker.recordInteraction('keyboard');
   if (event.key !== 'Escape') return;
   app.classList.remove('settings-open');
   settingsToggle.setAttribute('aria-expanded', 'false');
@@ -1338,7 +1118,10 @@ window.addEventListener('pointerdown', (event) => {
   if (nearBottom) modesHideTimer = setTimeout(() => app.classList.remove('show-modes'), 4000);
 });
 document.documentElement.addEventListener('mouseleave', () => app.classList.remove('show-modes'));
+document.addEventListener('visibilitychange', () => engagementTracker.setVisible(!document.hidden));
 window.addEventListener('pagehide', () => {
+  clearInterval(engagementHeartbeat);
+  engagementTracker.finish();
   player.dispose();
   if (audio) stopAudio();
 });

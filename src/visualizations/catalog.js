@@ -1,6 +1,9 @@
 import { createKaleidoscopeEffect } from '../effects/kaleidoscope.js';
 import { createPulseVisualization } from './pulse.js';
 import { createPrismVisualization } from './prism.js';
+import { createOrbitVisualization } from './orbit.js';
+import { createTerrainVisualization } from './terrain.js';
+import { createTunnelVisualization } from './tunnel.js';
 
 export const visualizationMetadata = [
   ['orbit', 'Orbit'],
@@ -24,7 +27,12 @@ export function createVisualizationCatalog(legacy) {
     media: id === 'trace' ? 'camera' : 'microphone',
     settings: id === 'equalizer' ? ['equalizerText'] : [],
     carouselEligible: id === 'trace' ? ({ hasCamera }) => hasCamera : undefined,
-    create: id === 'prism' ? createPrismVisualization : legacy[id],
+    create: {
+      orbit: createOrbitVisualization,
+      terrain: createTerrainVisualization,
+      prism: createPrismVisualization,
+      tunnel: createTunnelVisualization,
+    }[id] ?? legacy[id],
   }));
 
   definitions.push(
