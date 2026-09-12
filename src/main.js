@@ -31,6 +31,7 @@ const equalizerTextInput = document.querySelector('#equalizer-text');
 const equalizerFontSizeInput = document.querySelector('#equalizer-font-size');
 const equalizerFontSizeValue = document.querySelector('.equalizer-font-size-value');
 const debugModeInput = document.querySelector('#debug-mode');
+const fullscreenControl = document.querySelector('.fullscreen-control');
 const debugPanel = document.querySelector('.debug-panel');
 const debugFields = Object.fromEntries([...debugPanel.querySelectorAll('[data-debug]')].map((field) => [field.dataset.debug, field]));
 const modeSelect = document.querySelector('#visualization-mode');
@@ -86,6 +87,12 @@ equalizerFontSizeInput.value = equalizerFontSize;
 equalizerFontSizeValue.textContent = equalizerFontSize;
 debugModeInput.checked = debugMode;
 debugPanel.hidden = !debugMode;
+const requestFullscreen = document.documentElement.requestFullscreen?.bind(document.documentElement)
+  ?? document.documentElement.webkitRequestFullscreen?.bind(document.documentElement);
+const exitFullscreen = document.exitFullscreen?.bind(document)
+  ?? document.webkitExitFullscreen?.bind(document);
+fullscreenControl.hidden = !requestFullscreen;
+let wasFullscreen = Boolean(document.fullscreenElement ?? document.webkitFullscreenElement);
 let randomHue = Math.random() * 360;
 let audio = null;
 let frame = 0;
@@ -1103,6 +1110,26 @@ debugModeInput.addEventListener('change', () => {
   loadMonitor.reset();
   saveSettings();
 });
+fullscreenControl.addEventListener('click', async () => {
+  try {
+    const fullscreenElement = document.fullscreenElement ?? document.webkitFullscreenElement;
+    if (fullscreenElement) await exitFullscreen?.();
+    else await requestFullscreen?.();
+  } catch (cause) {
+    console.error('Fullscreen request failed:', cause);
+  }
+});
+const updateFullscreenControl = () => {
+  const fullscreenElement = document.fullscreenElement ?? document.webkitFullscreenElement;
+  const isFullscreen = Boolean(fullscreenElement);
+  fullscreenControl.firstChild.textContent = isFullscreen ? 'EXIT ' : 'FULLSCREEN ';
+  if (isFullscreen !== wasFullscreen) {
+    window.umami?.track('fullscreen-toggled', { state: isFullscreen ? 'entered' : 'exited' });
+    wasFullscreen = isFullscreen;
+  }
+};
+document.addEventListener('fullscreenchange', updateFullscreenControl);
+document.addEventListener('webkitfullscreenchange', updateFullscreenControl);
 modeSelect.addEventListener('change', () => switchVisualization(modeSelect.value, { reason: 'user' }));
 window.addEventListener('resize', resize);
 window.addEventListener('resize', () => player.resize({ width: innerWidth, height: innerHeight }));
