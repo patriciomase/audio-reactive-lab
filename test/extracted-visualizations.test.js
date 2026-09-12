@@ -65,7 +65,7 @@ test('Pac-Man activation sends independently sized characters across the viewpor
   const ctx = {
     ...createContext(),
     save() {}, restore() {}, translate() {}, scale() {},
-    drawImage(_image, x, y, width, height) { draws.push({ x, y, width, height }); },
+    drawImage(image, x, y, width, height) { draws.push({ source: image.src, x, y, width, height }); },
   };
   const createImage = () => ({ complete: true, naturalWidth: 64, src: '' });
   const pacman = createPacmanVisualization({ random: (() => {
@@ -77,5 +77,6 @@ test('Pac-Man activation sends independently sized characters across the viewpor
 
   assert.ok(draws.length >= 12);
   assert.ok(new Set(draws.map(({ width }) => Math.round(width))).size > 3);
+  assert.equal(draws.filter(({ source }) => source.includes('pacman-')).length, 1);
   assert.doesNotThrow(() => pacman.dispose());
 });
