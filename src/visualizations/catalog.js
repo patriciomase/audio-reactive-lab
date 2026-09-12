@@ -4,6 +4,7 @@ import { createPrismVisualization } from './prism.js';
 import { createOrbitVisualization } from './orbit.js';
 import { createTerrainVisualization } from './terrain.js';
 import { createTunnelVisualization } from './tunnel.js';
+import { createPacmanVisualization } from './pacman.js';
 
 export const visualizationMetadata = [
   ['orbit', 'Orbit'],
@@ -18,6 +19,7 @@ export const visualizationMetadata = [
   ['glyph', 'Glyph'],
   ['pulse', 'Pulse'],
   ['kaleidoscope', 'Kaleidoscope'],
+  ['pacman', 'Pac-Man'],
 ];
 
 export function createVisualizationCatalog(legacy) {
@@ -44,6 +46,7 @@ export function createVisualizationCatalog(legacy) {
       settings: [],
       create: () => createPulseVisualization({ effect: createKaleidoscopeEffect(), sizeScale: .48, emitRipples: true }),
     },
+    { id: 'pacman', label: 'Pac-Man', media: 'microphone', settings: [], create: createPacmanVisualization },
   );
   return definitions;
 }

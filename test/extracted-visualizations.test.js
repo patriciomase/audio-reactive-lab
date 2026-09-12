@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createOrbitVisualization } from '../src/visualizations/orbit.js';
 import { createTerrainVisualization } from '../src/visualizations/terrain.js';
 import { createTunnelVisualization } from '../src/visualizations/tunnel.js';
+import { createPacmanVisualization } from '../src/visualizations/pacman.js';
 
 function createContext() {
   const counts = { arc: 0, fill: 0, stroke: 0, closePath: 0 };
@@ -57,4 +58,24 @@ test('Tunnel activation samples history and renders closed rings and rails', () 
   assert.ok(ctx.counts.closePath > 0);
   assert.equal(ctx.globalCompositeOperation, 'source-over');
   assert.doesNotThrow(() => tunnel.dispose());
+});
+
+test('Pac-Man activation sends independently sized characters across the viewport', () => {
+  const draws = [];
+  const ctx = {
+    ...createContext(),
+    save() {}, restore() {}, translate() {}, scale() {},
+    drawImage(_image, x, y, width, height) { draws.push({ x, y, width, height }); },
+  };
+  const createImage = () => ({ complete: true, naturalWidth: 64, src: '' });
+  const pacman = createPacmanVisualization({ random: (() => {
+    let value = 0;
+    return () => (value += .137) % 1;
+  })(), createImage });
+
+  pacman.render(renderFrame(ctx));
+
+  assert.ok(draws.length >= 12);
+  assert.ok(new Set(draws.map(({ width }) => Math.round(width))).size > 3);
+  assert.doesNotThrow(() => pacman.dispose());
 });
