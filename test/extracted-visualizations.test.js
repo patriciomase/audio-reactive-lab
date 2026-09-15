@@ -84,11 +84,13 @@ test('Pac-Man activation sends independently sized characters across the viewpor
 
 test('Galaxian activation renders a multi-row fleet and player fighter', () => {
   const draws = [];
+  let shadowWrites = 0;
   const ctx = {
     ...createContext(),
-    save() {}, restore() {},
+    save() {}, restore() {}, translate() {}, rotate() {}, fillRect() {},
     drawImage(image, x, y, width, height) { draws.push({ source: image.src, x, y, width, height }); },
   };
+  Object.defineProperty(ctx, 'shadowBlur', { set() { shadowWrites += 1; } });
   const galaxian = createGalaxianVisualization({
     random: () => .5,
     createImage: () => ({ complete: true, naturalWidth: 64, src: '' }),
@@ -99,5 +101,6 @@ test('Galaxian activation renders a multi-row fleet and player fighter', () => {
   assert.ok(draws.length > 40);
   assert.equal(draws.filter(({ source }) => source.includes('fighter')).length, 1);
   assert.ok(new Set(draws.map(({ y }) => Math.round(y / 20))).size >= 5);
+  assert.equal(shadowWrites, 0, 'per-ship canvas shadows are too expensive for the fleet');
   assert.doesNotThrow(() => galaxian.dispose());
 });

@@ -17,6 +17,7 @@ export function createGalaxianVisualization({
   const sprites = SHIP_SOURCES.map((source) => loadSprite(source, createImage));
   const fighter = loadSprite('assets/galaxian/fighter.svg', createImage);
   let ships = [];
+  let starLayers = [];
   let formationWidth = 0;
   let formationHeight = 0;
   let previousLow = 0;
@@ -43,9 +44,26 @@ export function createGalaxianVisualization({
           shakeX: .45 + random() * 1.2,
           shakeY: .45 + random() * 1.25,
           scale: .82 + random() * .28,
+          rotates: random() < .2,
+          rotationSpeed: .012 + random() * .025,
+          rotationRange: .12 + random() * .32,
+          dives: row > 0 && random() < .11,
+          diveOffset: Math.floor(random() * 720),
         });
       }
     }
+    starLayers = [
+      { count: width < 700 ? 24 : 42, speed: .28, size: .7, alpha: .2, stars: [] },
+      { count: width < 700 ? 18 : 30, speed: .62, size: 1.15, alpha: .34, stars: [] },
+      { count: width < 700 ? 10 : 18, speed: 1.15, size: 1.8, alpha: .5, stars: [] },
+    ];
+    starLayers.forEach((layer) => {
+      layer.stars = Array.from({ length: layer.count }, () => ({
+        x: random() * width,
+        y: random() * height,
+        phase: random() * Math.PI * 2,
+      }));
+    });
   }
 
   return {
@@ -67,21 +85,53 @@ export function createGalaxianVisualization({
       const shipSize = Math.max(30, Math.min(58, Math.min(width, height) * .065));
 
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = 'source-over';
+      starLayers.forEach((layer, layerIndex) => {
+        ctx.fillStyle = `rgba(${190 + layerIndex * 20}, ${205 + layerIndex * 15}, 255, ${layer.alpha + bands.high * .08})`;
+        layer.stars.forEach((star) => {
+          star.y += layer.speed * (1 + bands.high * .45);
+          star.x += Math.sin(frame * .006 + star.phase) * layer.speed * .035;
+          if (star.y > height + layer.size * 3) {
+            star.y = -layer.size * 3;
+            star.x = random() * width;
+          }
+          const streak = layer.size * (1.4 + layer.speed * 2 + bands.high * 2.5);
+          ctx.fillRect(star.x, star.y, layer.size, streak);
+        });
+      });
+
       ships.forEach((ship) => {
         const rowEnergy = ship.row < 2 ? bands.low : ship.row < 4 ? bands.mid : bands.high;
         const shake = .5 + rowEnergy * 8 + impact * 5;
-        const x = centreX + blockX + ship.x
+        let x = centreX + blockX + ship.x
           + Math.sin(frame * (.17 + ship.row * .013) + ship.phase) * shake * ship.shakeX;
-        const y = centreY + blockY + ship.y
+        let y = centreY + blockY + ship.y
           + Math.cos(frame * (.19 + ship.row * .011) + ship.phase) * shake * ship.shakeY;
-        const size = shipSize * ship.scale * (1 + rowEnergy * .12 + impact * .06);
+        let diveRotation = 0;
+        if (ship.dives) {
+          const diveCycle = ((frame + ship.diveOffset) % 720) / 720;
+          if (diveCycle < .24) {
+            const progress = diveCycle / .24;
+            const envelope = Math.sin(progress * Math.PI);
+            x += Math.sin(progress * Math.PI * 2) * width * .16 * envelope;
+            y += envelope * height * .34;
+            diveRotation = Math.sin(progress * Math.PI * 2) * .72;
+          }
+        }
+        const size = shipSize * ship.scale;
         const image = sprites[ship.sprite];
         if (!image.complete || image.naturalWidth === 0) return;
         ctx.globalAlpha = .66 + Math.min(.3, rowEnergy * .42);
-        ctx.shadowColor = ship.sprite === 0 ? '#ff4d68' : ship.sprite === 1 ? '#b76cff' : '#34e4e9';
-        ctx.shadowBlur = 7 + rowEnergy * 18 + impact * 9;
-        ctx.drawImage(image, x - size / 2, y - size / 2, size, size * .82);
+        if (ship.rotates || diveRotation) {
+          const rotation = diveRotation + Math.sin(frame * ship.rotationSpeed + ship.phase) * ship.rotationRange;
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(rotation);
+          ctx.drawImage(image, -size / 2, -size * .41, size, size * .82);
+          ctx.restore();
+        } else {
+          ctx.drawImage(image, x - size / 2, y - size * .41, size, size * .82);
+        }
       });
 
       if (fighter.complete && fighter.naturalWidth !== 0) {
@@ -89,8 +139,6 @@ export function createGalaxianVisualization({
         const x = centreX + Math.sin(frame * .014) * formationWidth * .38;
         const y = Math.min(height - size * .7, centreY + formationHeight + height * .19);
         ctx.globalAlpha = .8;
-        ctx.shadowColor = '#42d7ff';
-        ctx.shadowBlur = 9 + bands.level * 20;
         ctx.drawImage(fighter, x - size / 2, y - size / 2, size, size * .82);
       }
       ctx.restore();
@@ -100,6 +148,7 @@ export function createGalaxianVisualization({
     resize({ width, height }) { populate(width, height); },
     dispose() {
       ships = [];
+      starLayers = [];
       previousLow = 0;
       bassAverage = .12;
       impact = 0;
