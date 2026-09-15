@@ -39,15 +39,15 @@ export function createGalaxianVisualization({
           x: (column - (rowColumns - 1) / 2) * spacingX,
           y: row * spacingY,
           row,
+          frequencyPosition: rowColumns === 1 ? .5 : column / (rowColumns - 1),
+          energy: 0,
           sprite: row === 0 ? 0 : row < 3 ? 1 : 2,
           phase: random() * Math.PI * 2,
-          shakeX: .45 + random() * 1.2,
-          shakeY: .45 + random() * 1.25,
           scale: .82 + random() * .28,
           rotates: random() < .2,
-          rotationSpeed: .012 + random() * .025,
-          rotationRange: .12 + random() * .32,
-          dives: row > 0 && random() < .11,
+          rotationSpeed: .006 + random() * .012,
+          rotationRange: .08 + random() * .2,
+          dives: row > 0 && random() < .08,
           diveOffset: Math.floor(random() * 720),
         });
       }
@@ -79,9 +79,8 @@ export function createGalaxianVisualization({
 
       const centreX = width * .5;
       const centreY = Math.max(78, height * .13);
-      const blockX = Math.sin(frame * .011) * Math.min(34, width * .035)
-        + Math.sin(frame * 2.17) * impact * 7;
-      const blockY = Math.cos(frame * 1.73) * impact * 5;
+      const blockX = Math.sin(frame * .009) * Math.min(30, width * .03);
+      const blockY = -impact * 5;
       const shipSize = Math.max(30, Math.min(58, Math.min(width, height) * .065));
 
       ctx.save();
@@ -101,12 +100,15 @@ export function createGalaxianVisualization({
       });
 
       ships.forEach((ship) => {
-        const rowEnergy = ship.row < 2 ? bands.low : ship.row < 4 ? bands.mid : bands.high;
-        const shake = .5 + rowEnergy * 8 + impact * 5;
-        let x = centreX + blockX + ship.x
-          + Math.sin(frame * (.17 + ship.row * .013) + ship.phase) * shake * ship.shakeX;
-        let y = centreY + blockY + ship.y
-          + Math.cos(frame * (.19 + ship.row * .011) + ship.phase) * shake * ship.shakeY;
+        const position = ship.frequencyPosition;
+        const frequencyEnergy = position < .5
+          ? bands.low + (bands.mid - bands.low) * position * 2
+          : bands.mid + (bands.high - bands.mid) * (position - .5) * 2;
+        const targetEnergy = Math.min(1.25, frequencyEnergy);
+        ship.energy += (targetEnergy - ship.energy) * (targetEnergy > ship.energy ? .2 : .065);
+        const equalizerLift = ship.energy * (16 + (5 - Math.min(5, ship.row)) * 2.5);
+        let x = centreX + blockX + ship.x;
+        let y = centreY + blockY + ship.y - equalizerLift;
         let diveRotation = 0;
         if (ship.dives) {
           const diveCycle = ((frame + ship.diveOffset) % 720) / 720;
@@ -118,12 +120,13 @@ export function createGalaxianVisualization({
             diveRotation = Math.sin(progress * Math.PI * 2) * .72;
           }
         }
-        const size = shipSize * ship.scale;
+        const size = shipSize * ship.scale * (1 + ship.energy * .1);
         const image = sprites[ship.sprite];
         if (!image.complete || image.naturalWidth === 0) return;
-        ctx.globalAlpha = .66 + Math.min(.3, rowEnergy * .42);
+        ctx.globalAlpha = .66 + Math.min(.3, ship.energy * .42);
         if (ship.rotates || diveRotation) {
-          const rotation = diveRotation + Math.sin(frame * ship.rotationSpeed + ship.phase) * ship.rotationRange;
+          const rotation = diveRotation
+            + Math.sin(frame * ship.rotationSpeed + ship.phase) * ship.rotationRange * (.25 + ship.energy * .75);
           ctx.save();
           ctx.translate(x, y);
           ctx.rotate(rotation);
