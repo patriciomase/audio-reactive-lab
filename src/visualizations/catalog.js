@@ -5,6 +5,7 @@ import { createOrbitVisualization } from './orbit.js';
 import { createTerrainVisualization } from './terrain.js';
 import { createTunnelVisualization } from './tunnel.js';
 import { createPacmanVisualization } from './pacman.js';
+import { createGalaxianVisualization } from './galaxian.js';
 
 export const visualizationMetadata = [
   ['orbit', 'Orbit'],
@@ -20,6 +21,7 @@ export const visualizationMetadata = [
   ['pulse', 'Pulse'],
   ['kaleidoscope', 'Kaleidoscope'],
   ['pacman', 'Pac-Man'],
+  ['galaxian', 'Galaxian'],
 ];
 
 export function createVisualizationCatalog(legacy) {
@@ -47,6 +49,7 @@ export function createVisualizationCatalog(legacy) {
       create: () => createPulseVisualization({ effect: createKaleidoscopeEffect(), sizeScale: .48, emitRipples: true }),
     },
     { id: 'pacman', label: 'Pac-Man', media: 'microphone', settings: [], create: createPacmanVisualization },
+    { id: 'galaxian', label: 'Galaxian', media: 'microphone', settings: [], create: createGalaxianVisualization },
   );
   return definitions;
 }

@@ -4,6 +4,7 @@ import { createOrbitVisualization } from '../src/visualizations/orbit.js';
 import { createTerrainVisualization } from '../src/visualizations/terrain.js';
 import { createTunnelVisualization } from '../src/visualizations/tunnel.js';
 import { createPacmanVisualization } from '../src/visualizations/pacman.js';
+import { createGalaxianVisualization } from '../src/visualizations/galaxian.js';
 
 function createContext() {
   const counts = { arc: 0, fill: 0, stroke: 0, closePath: 0 };
@@ -79,4 +80,24 @@ test('Pac-Man activation sends independently sized characters across the viewpor
   assert.ok(new Set(draws.map(({ width }) => Math.round(width))).size > 3);
   assert.equal(draws.filter(({ source }) => source.includes('pacman-')).length, 1);
   assert.doesNotThrow(() => pacman.dispose());
+});
+
+test('Galaxian activation renders a multi-row fleet and player fighter', () => {
+  const draws = [];
+  const ctx = {
+    ...createContext(),
+    save() {}, restore() {},
+    drawImage(image, x, y, width, height) { draws.push({ source: image.src, x, y, width, height }); },
+  };
+  const galaxian = createGalaxianVisualization({
+    random: () => .5,
+    createImage: () => ({ complete: true, naturalWidth: 64, src: '' }),
+  });
+
+  galaxian.render(renderFrame(ctx, 54));
+
+  assert.ok(draws.length > 40);
+  assert.equal(draws.filter(({ source }) => source.includes('fighter')).length, 1);
+  assert.ok(new Set(draws.map(({ y }) => Math.round(y / 20))).size >= 5);
+  assert.doesNotThrow(() => galaxian.dispose());
 });

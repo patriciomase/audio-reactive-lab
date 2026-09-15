@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 52" role="img" aria-label="Cyan arcade scout">
+  <path fill="#34e4e9" d="m32 3 8 11 15 2-8 9 11 12-15-4-5 16-6-10-6 10-5-16-15 4 11-12-8-9 15-2Z"/>
+  <path fill="#725cff" d="m32 11 6 11-6 10-6-10Zm-17 9 9 3-5 6-8 2Zm34 0-9 3 5 6 8 2Z"/>
+  <circle cx="32" cy="22" r="2.5" fill="#fff"/>
+</svg>

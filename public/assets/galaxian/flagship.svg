@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 52" role="img" aria-label="Arcade flagship">
+  <path fill="#ff4d68" d="M28 2h8l4 9 12 4 8 15-10-4-3 16-9-9-6 17-6-17-9 9-3-16-10 4 8-15 12-4Z"/>
+  <path fill="#ffd84a" d="m32 8 7 12-7 9-7-9Zm-18 11h10l-4 7H9Zm26 0h10l5 7H44Z"/>
+  <circle cx="32" cy="20" r="3" fill="#fff7d8"/>
+</svg>
