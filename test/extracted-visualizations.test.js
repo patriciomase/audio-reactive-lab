@@ -4,7 +4,7 @@ import { createOrbitVisualization } from '../src/visualizations/orbit.js';
 import { createTerrainVisualization } from '../src/visualizations/terrain.js';
 import { createTunnelVisualization } from '../src/visualizations/tunnel.js';
 import { createPacmanVisualization } from '../src/visualizations/pacman.js';
-import { createGalaxianVisualization } from '../src/visualizations/galaxian.js';
+import { createGalaxianFrequencyLanes, createGalaxianVisualization } from '../src/visualizations/galaxian.js';
 
 function createContext() {
   const counts = { arc: 0, fill: 0, stroke: 0, closePath: 0 };
@@ -103,4 +103,21 @@ test('Galaxian activation renders a multi-row fleet and player fighter', () => {
   assert.ok(new Set(draws.map(({ y }) => Math.round(y / 20))).size >= 5);
   assert.equal(shadowWrites, 0, 'per-ship canvas shadows are too expensive for the fleet');
   assert.doesNotThrow(() => galaxian.dispose());
+});
+
+test('Galaxian frequency lanes normalize bass and treble independently', () => {
+  const controller = createGalaxianFrequencyLanes(2);
+  const spectrum = new Uint8Array(1024);
+  spectrum.fill(210, 1, 8);
+  spectrum.fill(28, 300, 1024);
+  let lanes;
+  for (let frame = 0; frame < 180; frame += 1) {
+    lanes = controller.update({
+      audioFrame: { isLive: true, spectrum, sampleRate: 48000, fftSize: 2048 },
+      bands: { low: .8, mid: .2, high: .1 },
+      frame,
+    });
+  }
+
+  assert.ok(Math.abs(lanes[0].energy - lanes[1].energy) < .15);
 });

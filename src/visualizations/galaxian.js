@@ -10,6 +10,48 @@ function loadSprite(source, createImage) {
   return image;
 }
 
+function averageSpectrum(spectrum, from, to) {
+  let total = 0;
+  const start = Math.max(1, Math.floor(from));
+  const end = Math.min(spectrum.length, Math.ceil(to));
+  for (let index = start; index < end; index += 1) total += spectrum[index];
+  return total / Math.max(1, end - start) / 255;
+}
+
+export function createGalaxianFrequencyLanes(count) {
+  const lanes = Array.from({ length: count }, () => ({ average: null, energy: 0 }));
+  return {
+    update({ audioFrame, bands, frame }) {
+      lanes.forEach((lane, index) => {
+        const position = count === 1 ? .5 : index / (count - 1);
+        let raw;
+        if (audioFrame.isLive && audioFrame.spectrum.length) {
+          const minFrequency = 45;
+          const maxFrequency = Math.min(15000, audioFrame.sampleRate / 2);
+          const frequency = minFrequency * Math.pow(maxFrequency / minFrequency, position);
+          const bin = frequency / (audioFrame.sampleRate / audioFrame.fftSize);
+          const radius = 2 + Math.round(position * 5);
+          raw = averageSpectrum(audioFrame.spectrum, bin - radius, bin + radius + 1);
+        } else {
+          raw = position < .5
+            ? bands.low + (bands.mid - bands.low) * position * 2
+            : bands.mid + (bands.high - bands.mid) * (position - .5) * 2;
+          raw *= .82 + Math.sin(frame * .025 + index * 1.47) * .18;
+        }
+        if (lane.average === null) lane.average = Math.max(.025, raw);
+        lane.average += (raw - lane.average) * .012;
+        const normalized = raw <= .008 ? 0
+          : Math.max(0, Math.min(1.2, (raw - lane.average * .5) / (lane.average * .82 + .025)));
+        lane.energy += (normalized - lane.energy) * (normalized > lane.energy ? .22 : .065);
+      });
+      return lanes;
+    },
+    reset() {
+      lanes.forEach((lane) => { lane.average = null; lane.energy = 0; });
+    },
+  };
+}
+
 export function createGalaxianVisualization({
   random = Math.random,
   createImage = () => new Image(),
@@ -23,9 +65,13 @@ export function createGalaxianVisualization({
   let previousLow = 0;
   let bassAverage = .12;
   let impact = 0;
+  let frequencyLanes = null;
+  let laneCount = 0;
 
   function populate(width, height) {
     const columns = width < 700 ? 7 : 10;
+    laneCount = columns;
+    frequencyLanes = createGalaxianFrequencyLanes(columns);
     const rows = width < 700 ? 5 : 6;
     const spacingX = Math.min(76, width * .075);
     const spacingY = Math.min(62, height * .082);
@@ -39,8 +85,7 @@ export function createGalaxianVisualization({
           x: (column - (rowColumns - 1) / 2) * spacingX,
           y: row * spacingY,
           row,
-          frequencyPosition: rowColumns === 1 ? .5 : column / (rowColumns - 1),
-          energy: 0,
+          lane: Math.round((rowColumns === 1 ? .5 : column / (rowColumns - 1)) * (columns - 1)),
           sprite: row === 0 ? 0 : row < 3 ? 1 : 2,
           phase: random() * Math.PI * 2,
           scale: .82 + random() * .28,
@@ -82,6 +127,7 @@ export function createGalaxianVisualization({
       const blockX = Math.sin(frame * .009) * Math.min(30, width * .03);
       const blockY = -impact * 5;
       const shipSize = Math.max(30, Math.min(58, Math.min(width, height) * .065));
+      const lanes = frequencyLanes.update({ audioFrame, bands, frame });
 
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
@@ -100,13 +146,8 @@ export function createGalaxianVisualization({
       });
 
       ships.forEach((ship) => {
-        const position = ship.frequencyPosition;
-        const frequencyEnergy = position < .5
-          ? bands.low + (bands.mid - bands.low) * position * 2
-          : bands.mid + (bands.high - bands.mid) * (position - .5) * 2;
-        const targetEnergy = Math.min(1.25, frequencyEnergy);
-        ship.energy += (targetEnergy - ship.energy) * (targetEnergy > ship.energy ? .2 : .065);
-        const equalizerLift = ship.energy * (16 + (5 - Math.min(5, ship.row)) * 2.5);
+        const energy = lanes[Math.min(laneCount - 1, ship.lane)].energy;
+        const equalizerLift = energy * (18 + (5 - Math.min(5, ship.row)) * 2.8);
         let x = centreX + blockX + ship.x;
         let y = centreY + blockY + ship.y - equalizerLift;
         let diveRotation = 0;
@@ -120,13 +161,13 @@ export function createGalaxianVisualization({
             diveRotation = Math.sin(progress * Math.PI * 2) * .72;
           }
         }
-        const size = shipSize * ship.scale * (1 + ship.energy * .1);
+        const size = shipSize * ship.scale * (1 + energy * .1);
         const image = sprites[ship.sprite];
         if (!image.complete || image.naturalWidth === 0) return;
-        ctx.globalAlpha = .66 + Math.min(.3, ship.energy * .42);
+        ctx.globalAlpha = .66 + Math.min(.3, energy * .42);
         if (ship.rotates || diveRotation) {
           const rotation = diveRotation
-            + Math.sin(frame * ship.rotationSpeed + ship.phase) * ship.rotationRange * (.25 + ship.energy * .75);
+            + Math.sin(frame * ship.rotationSpeed + ship.phase) * ship.rotationRange * (.25 + energy * .75);
           ctx.save();
           ctx.translate(x, y);
           ctx.rotate(rotation);
@@ -155,6 +196,9 @@ export function createGalaxianVisualization({
       previousLow = 0;
       bassAverage = .12;
       impact = 0;
+      frequencyLanes?.reset();
+      frequencyLanes = null;
+      laneCount = 0;
     },
   };
 }
