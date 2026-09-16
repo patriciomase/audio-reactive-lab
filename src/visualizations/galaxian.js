@@ -67,6 +67,8 @@ export function createGalaxianVisualization({
   let impact = 0;
   let frequencyLanes = null;
   let laneCount = 0;
+  let fighterX = null;
+  let fighterPreviousX = null;
 
   function populate(width, height) {
     const columns = width < 700 ? 7 : 10;
@@ -92,8 +94,6 @@ export function createGalaxianVisualization({
           rotates: random() < .2,
           rotationSpeed: .006 + random() * .012,
           rotationRange: .08 + random() * .2,
-          dives: row > 0 && random() < .08,
-          diveOffset: Math.floor(random() * 720),
         });
       }
     }
@@ -124,8 +124,6 @@ export function createGalaxianVisualization({
 
       const centreX = width * .5;
       const centreY = Math.max(78, height * .13);
-      const blockX = Math.sin(frame * .009) * Math.min(30, width * .03);
-      const blockY = -impact * 5;
       const shipSize = Math.max(30, Math.min(58, Math.min(width, height) * .065));
       const lanes = frequencyLanes.update({ audioFrame, bands, frame });
 
@@ -147,27 +145,16 @@ export function createGalaxianVisualization({
 
       ships.forEach((ship) => {
         const energy = lanes[Math.min(laneCount - 1, ship.lane)].energy;
-        const equalizerLift = energy * (18 + (5 - Math.min(5, ship.row)) * 2.8);
-        let x = centreX + blockX + ship.x;
-        let y = centreY + blockY + ship.y - equalizerLift;
-        let diveRotation = 0;
-        if (ship.dives) {
-          const diveCycle = ((frame + ship.diveOffset) % 720) / 720;
-          if (diveCycle < .24) {
-            const progress = diveCycle / .24;
-            const envelope = Math.sin(progress * Math.PI);
-            x += Math.sin(progress * Math.PI * 2) * width * .16 * envelope;
-            y += envelope * height * .34;
-            diveRotation = Math.sin(progress * Math.PI * 2) * .72;
-          }
-        }
+        const barScale = .76 + energy * .48;
+        const distanceFromBottom = formationHeight - ship.y;
+        const x = centreX + ship.x;
+        const y = centreY + formationHeight - distanceFromBottom * barScale - energy * 7 - impact * 3;
         const size = shipSize * ship.scale * (1 + energy * .1);
         const image = sprites[ship.sprite];
         if (!image.complete || image.naturalWidth === 0) return;
         ctx.globalAlpha = .66 + Math.min(.3, energy * .42);
-        if (ship.rotates || diveRotation) {
-          const rotation = diveRotation
-            + Math.sin(frame * ship.rotationSpeed + ship.phase) * ship.rotationRange * (.25 + energy * .75);
+        if (ship.rotates) {
+          const rotation = Math.sin(frame * ship.rotationSpeed + ship.phase) * ship.rotationRange * (.25 + energy * .75);
           ctx.save();
           ctx.translate(x, y);
           ctx.rotate(rotation);
@@ -180,10 +167,26 @@ export function createGalaxianVisualization({
 
       if (fighter.complete && fighter.naturalWidth !== 0) {
         const size = shipSize * 1.12;
-        const x = centreX + Math.sin(frame * .014) * formationWidth * .38;
-        const y = Math.min(height - size * .7, centreY + formationHeight + height * .19);
+        let steering;
+        if (audioFrame.isLive && audioFrame.waveform.length) {
+          steering = (audioFrame.waveform[(frame * 13) % audioFrame.waveform.length] - 128) / 128;
+        } else {
+          steering = Math.sin(frame * .018) * .72 + Math.sin(frame * .007 + 1.3) * .28;
+        }
+        const targetX = centreX + steering * formationWidth * (.22 + Math.min(1, bands.mid) * .16);
+        if (fighterX === null) fighterX = centreX;
+        fighterPreviousX ??= fighterX;
+        fighterX += (targetX - fighterX) * (.045 + Math.min(1, bands.mid) * .035);
+        const velocity = fighterX - fighterPreviousX;
+        fighterPreviousX = fighterX;
+        const y = height - Math.max(88, size * .8) - impact * 18 - Math.min(1, bands.low) * 10;
+        const rotation = Math.max(-.24, Math.min(.24, velocity * .035));
         ctx.globalAlpha = .8;
-        ctx.drawImage(fighter, x - size / 2, y - size / 2, size, size * .82);
+        ctx.save();
+        ctx.translate(fighterX, y);
+        ctx.rotate(rotation);
+        ctx.drawImage(fighter, -size / 2, -size * .41, size, size * .82);
+        ctx.restore();
       }
       ctx.restore();
       ctx.globalCompositeOperation = 'source-over';
@@ -199,6 +202,8 @@ export function createGalaxianVisualization({
       frequencyLanes?.reset();
       frequencyLanes = null;
       laneCount = 0;
+      fighterX = null;
+      fighterPreviousX = null;
     },
   };
 }
