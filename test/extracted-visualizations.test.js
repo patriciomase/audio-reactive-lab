@@ -121,3 +121,30 @@ test('Galaxian frequency lanes normalize bass and treble independently', () => {
 
   assert.ok(Math.abs(lanes[0].energy - lanes[1].energy) < .15);
 });
+
+test('Galaxian enemy equalizer bars never overlap', () => {
+  let draws = [];
+  const ctx = {
+    ...createContext(),
+    save() {}, restore() {}, translate() {}, rotate() {}, fillRect() {},
+    drawImage(image, x, y, width, height) { draws.push({ source: image.src, x, y, width, height }); },
+  };
+  const galaxian = createGalaxianVisualization({
+    random: () => .5,
+    createImage: () => ({ complete: true, naturalWidth: 64, src: '' }),
+  });
+  for (let frame = 1; frame <= 300; frame += 1) {
+    draws = [];
+    galaxian.render(renderFrame(ctx, frame));
+    const enemies = draws.filter(({ source }) => !source.includes('fighter'));
+    for (let left = 0; left < enemies.length; left += 1) {
+      for (let right = left + 1; right < enemies.length; right += 1) {
+        const a = enemies[left];
+        const b = enemies[right];
+        const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+        const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+        assert.ok(overlapX <= 0 || overlapY <= 0, `enemy rectangles overlap at frame ${frame} by ${overlapX.toFixed(1)}×${overlapY.toFixed(1)}`);
+      }
+    }
+  }
+});

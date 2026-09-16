@@ -69,6 +69,9 @@ export function createGalaxianVisualization({
   let laneCount = 0;
   let fighterX = null;
   let fighterPreviousX = null;
+  let fighterPhase = 0;
+  let fighterLift = 0;
+  let formationPhase = 0;
 
   function populate(width, height) {
     const columns = width < 700 ? 7 : 10;
@@ -82,12 +85,14 @@ export function createGalaxianVisualization({
     ships = [];
     for (let row = 0; row < rows; row += 1) {
       const rowColumns = row === 0 ? Math.max(3, columns - 4) : row === 1 ? columns - 2 : columns;
+      const firstLane = Math.floor((columns - rowColumns) / 2);
       for (let column = 0; column < rowColumns; column += 1) {
+        const lane = firstLane + column;
         ships.push({
-          x: (column - (rowColumns - 1) / 2) * spacingX,
+          x: (lane - (columns - 1) / 2) * spacingX,
           y: row * spacingY,
           row,
-          lane: Math.round((rowColumns === 1 ? .5 : column / (rowColumns - 1)) * (columns - 1)),
+          lane,
           sprite: row === 0 ? 0 : row < 3 ? 1 : 2,
           phase: random() * Math.PI * 2,
           scale: .82 + random() * .28,
@@ -124,6 +129,8 @@ export function createGalaxianVisualization({
 
       const centreX = width * .5;
       const centreY = Math.max(78, height * .13);
+      formationPhase += .004 + Math.min(1, bands.level) * .003;
+      const formationX = Math.sin(formationPhase) * Math.min(48, width * .045);
       const shipSize = Math.max(30, Math.min(58, Math.min(width, height) * .065));
       const lanes = frequencyLanes.update({ audioFrame, bands, frame });
 
@@ -145,9 +152,9 @@ export function createGalaxianVisualization({
 
       ships.forEach((ship) => {
         const energy = lanes[Math.min(laneCount - 1, ship.lane)].energy;
-        const barScale = .76 + energy * .48;
+        const barScale = 1 + energy * .38;
         const distanceFromBottom = formationHeight - ship.y;
-        const x = centreX + ship.x;
+        const x = centreX + formationX + ship.x;
         const y = centreY + formationHeight - distanceFromBottom * barScale - energy * 7 - impact * 3;
         const size = shipSize * ship.scale * (1 + energy * .1);
         const image = sprites[ship.sprite];
@@ -167,20 +174,18 @@ export function createGalaxianVisualization({
 
       if (fighter.complete && fighter.naturalWidth !== 0) {
         const size = shipSize * 1.12;
-        let steering;
-        if (audioFrame.isLive && audioFrame.waveform.length) {
-          steering = (audioFrame.waveform[(frame * 13) % audioFrame.waveform.length] - 128) / 128;
-        } else {
-          steering = Math.sin(frame * .018) * .72 + Math.sin(frame * .007 + 1.3) * .28;
-        }
+        fighterPhase += .008 + Math.min(1, bands.mid) * .012;
+        const steering = Math.sin(fighterPhase) * .76 + Math.sin(fighterPhase * .43 + 1.3) * .24;
         const targetX = centreX + steering * formationWidth * (.22 + Math.min(1, bands.mid) * .16);
         if (fighterX === null) fighterX = centreX;
         fighterPreviousX ??= fighterX;
-        fighterX += (targetX - fighterX) * (.045 + Math.min(1, bands.mid) * .035);
+        fighterX += (targetX - fighterX) * .055;
         const velocity = fighterX - fighterPreviousX;
         fighterPreviousX = fighterX;
-        const y = height - Math.max(88, size * .8) - impact * 18 - Math.min(1, bands.low) * 10;
-        const rotation = Math.max(-.24, Math.min(.24, velocity * .035));
+        const targetLift = impact * 15 + Math.min(1, bands.low) * 8;
+        fighterLift += (targetLift - fighterLift) * .09;
+        const y = height - Math.max(88, size * .8) - fighterLift;
+        const rotation = Math.max(-.18, Math.min(.18, velocity * .025));
         ctx.globalAlpha = .8;
         ctx.save();
         ctx.translate(fighterX, y);
@@ -204,6 +209,9 @@ export function createGalaxianVisualization({
       laneCount = 0;
       fighterX = null;
       fighterPreviousX = null;
+      fighterPhase = 0;
+      fighterLift = 0;
+      formationPhase = 0;
     },
   };
 }
