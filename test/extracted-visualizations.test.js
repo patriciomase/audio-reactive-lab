@@ -149,16 +149,31 @@ test('Galaxian enemy equalizer bars never overlap', () => {
   }
 });
 
-test('Galaxian shots stay between one and two per second without burst catch-up', () => {
+test('Galaxian fires five to ten evenly spaced shots per second without burst catch-up', () => {
   const controller = createGalaxianShotController({ random: () => .5 });
   for (let time = 0; time <= 10000; time += 100) {
     controller.update({ time, width: 800, height: 600, level: .5, spawnX: 400, spawnY: 200 });
   }
-  assert.ok(controller.fired >= 10);
-  assert.ok(controller.fired <= 20);
+  assert.ok(controller.fired >= 50);
+  assert.ok(controller.fired <= 100);
   const beforePause = controller.fired;
   controller.update({ time: 30000, width: 800, height: 600, level: 1, spawnX: 400, spawnY: 200 });
   assert.equal(controller.fired, beforePause + 1);
+});
+
+test('Galaxian safe targets remain inside the enemy formation', () => {
+  const controller = createGalaxianShotController({ random: () => .5 });
+  for (let time = 0; time <= 1200; time += 50) {
+    controller.update({ time, width: 800, height: 600, level: 1, spawnX: 400, spawnY: 390 });
+  }
+  const left = controller.safeTarget({
+    preferredX: 300, fighterY: 510, width: 800, margin: 44, minX: 300, maxX: 500,
+  });
+  const right = controller.safeTarget({
+    preferredX: 500, fighterY: 510, width: 800, margin: 44, minX: 300, maxX: 500,
+  });
+  assert.ok(left.x >= 300 && left.x <= 500);
+  assert.ok(right.x >= 300 && right.x <= 500);
 });
 
 test('Galaxian fighter selects a path clear of every approaching shot', () => {

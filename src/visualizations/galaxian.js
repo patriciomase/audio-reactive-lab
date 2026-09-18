@@ -53,6 +53,7 @@ export function createGalaxianFrequencyLanes(count) {
 }
 
 export function createGalaxianShotController({ random = Math.random } = {}) {
+  const fireRateMultiplier = 5;
   const shots = [];
   let nextShotAt = null;
   let previousTime = null;
@@ -62,13 +63,13 @@ export function createGalaxianShotController({ random = Math.random } = {}) {
     update({ time, width, height, level, spawnX, spawnY }) {
       const delta = previousTime === null ? 1000 / 60 : Math.min(50, Math.max(0, time - previousTime));
       previousTime = time;
-      if (nextShotAt === null) nextShotAt = time + 750;
+      if (nextShotAt === null) nextShotAt = time + 750 / fireRateMultiplier;
       let didFire = false;
       if (time >= nextShotAt) {
         shots.push({ x: spawnX, y: spawnY, speed: .16 + random() * .08 });
         fired += 1;
         didFire = true;
-        nextShotAt = time + Math.max(500, Math.min(1000, 1000 - Math.min(1, level) * 500));
+        nextShotAt = time + Math.max(500, Math.min(1000, 1000 - Math.min(1, level) * 500)) / fireRateMultiplier;
       }
       for (let index = shots.length - 1; index >= 0; index -= 1) {
         shots[index].y += shots[index].speed * delta;
@@ -76,12 +77,12 @@ export function createGalaxianShotController({ random = Math.random } = {}) {
       }
       return didFire;
     },
-    safeTarget({ preferredX, fighterY, width, margin }) {
+    safeTarget({ preferredX, fighterY, width, margin, minX = margin, maxX = width - margin }) {
       const approaching = shots.filter((shot) => shot.y < fighterY + margin
         && (fighterY - shot.y) / shot.speed < 1400);
       if (!approaching.length) return { x: preferredX, urgency: 0 };
       const requiredClearance = margin * .88;
-      const clampX = (x) => Math.max(margin, Math.min(width - margin, x));
+      const clampX = (x) => Math.max(minX, Math.min(maxX, x));
       const candidates = [clampX(preferredX)];
       approaching.forEach((shot) => {
         candidates.push(clampX(shot.x - requiredClearance));
@@ -295,15 +296,24 @@ export function createGalaxianVisualization({
           spawnY: centreY + shooter.y + shipSize * .4,
         })) shooterIndex = (shooterIndex + 7) % ships.length;
         if (fighterX === null) fighterX = centreX;
-        const safe = shotController.safeTarget({ preferredX: fighterX, fighterY, width, margin: size });
+        const formationMinX = centreX - formationWidth * .5;
+        const formationMaxX = centreX + formationWidth * .5;
+        const safe = shotController.safeTarget({
+          preferredX: fighterX,
+          fighterY,
+          width,
+          margin: size,
+          minX: formationMinX,
+          maxX: formationMaxX,
+        });
         const delta = previousRenderTime === null ? 1000 / 60 : time - previousRenderTime;
         previousRenderTime = time;
         const motion = fighterMotion.update({
           targetX: safe.x,
           initialX: centreX,
           delta,
-          minX: size,
-          maxX: width - size,
+          minX: formationMinX,
+          maxX: formationMaxX,
         });
         fighterX = motion.x;
         const targetLift = impact * 15 + Math.min(1, bands.low) * 8;
