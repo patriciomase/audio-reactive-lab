@@ -61,7 +61,7 @@ export function createGalaxianVisualization({
   let ships = [];
   let starLayers = [];
   let formationWidth = 0;
-  let formationHeight = 0;
+  let formationSpacingX = 0;
   let previousLow = 0;
   let bassAverage = .12;
   let impact = 0;
@@ -71,7 +71,6 @@ export function createGalaxianVisualization({
   let fighterPreviousX = null;
   let fighterPhase = 0;
   let fighterLift = 0;
-  let formationPhase = 0;
 
   function populate(width, height) {
     const columns = width < 700 ? 7 : 10;
@@ -81,7 +80,7 @@ export function createGalaxianVisualization({
     const spacingX = Math.min(76, width * .075);
     const spacingY = Math.min(62, height * .082);
     formationWidth = (columns - 1) * spacingX;
-    formationHeight = (rows - 1) * spacingY;
+    formationSpacingX = spacingX;
     ships = [];
     for (let row = 0; row < rows; row += 1) {
       const rowColumns = row === 0 ? Math.max(3, columns - 4) : row === 1 ? columns - 2 : columns;
@@ -129,9 +128,7 @@ export function createGalaxianVisualization({
 
       const centreX = width * .5;
       const centreY = Math.max(78, height * .13);
-      formationPhase += .004 + Math.min(1, bands.level) * .003;
-      const formationX = Math.sin(formationPhase) * Math.min(48, width * .045);
-      const shipSize = Math.max(30, Math.min(58, Math.min(width, height) * .065));
+      const shipSize = Math.max(20, Math.min(52, Math.min(width, height) * .065, formationSpacingX * .72));
       const lanes = frequencyLanes.update({ audioFrame, bands, frame });
 
       ctx.save();
@@ -152,11 +149,12 @@ export function createGalaxianVisualization({
 
       ships.forEach((ship) => {
         const energy = lanes[Math.min(laneCount - 1, ship.lane)].energy;
-        const barScale = 1 + energy * .38;
-        const distanceFromBottom = formationHeight - ship.y;
-        const x = centreX + formationX + ship.x;
-        const y = centreY + formationHeight - distanceFromBottom * barScale - energy * 7 - impact * 3;
-        const size = shipSize * ship.scale * (1 + energy * .1);
+        const shakeRange = Math.min(8, formationSpacingX * .11);
+        const horizontalShake = Math.sin(frame * (.038 + ship.lane * .0018) + ship.lane * 1.21)
+          * energy * shakeRange;
+        const x = centreX + ship.x + horizontalShake;
+        const y = centreY + ship.y;
+        const size = shipSize * ship.scale;
         const image = sprites[ship.sprite];
         if (!image.complete || image.naturalWidth === 0) return;
         ctx.globalAlpha = .66 + Math.min(.3, energy * .42);
@@ -211,7 +209,7 @@ export function createGalaxianVisualization({
       fighterPreviousX = null;
       fighterPhase = 0;
       fighterLift = 0;
-      formationPhase = 0;
+      formationSpacingX = 0;
     },
   };
 }
