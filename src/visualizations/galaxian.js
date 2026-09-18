@@ -80,16 +80,26 @@ export function createGalaxianShotController({ random = Math.random } = {}) {
       const approaching = shots.filter((shot) => shot.y < fighterY + margin
         && (fighterY - shot.y) / shot.speed < 1400);
       if (!approaching.length) return { x: preferredX, urgency: 0 };
-      let safestX = margin;
-      let safestScore = -Infinity;
-      const steps = 12;
-      for (let index = 0; index <= steps; index += 1) {
-        const candidate = margin + (width - margin * 2) * index / steps;
-        let clearance = Infinity;
-        approaching.forEach((shot) => { clearance = Math.min(clearance, Math.abs(candidate - shot.x)); });
-        const score = clearance - Math.abs(candidate - preferredX) * .08;
-        if (score > safestScore) { safestScore = score; safestX = candidate; }
-      }
+      const requiredClearance = margin * .88;
+      const clampX = (x) => Math.max(margin, Math.min(width - margin, x));
+      const candidates = [clampX(preferredX)];
+      approaching.forEach((shot) => {
+        candidates.push(clampX(shot.x - requiredClearance));
+        candidates.push(clampX(shot.x + requiredClearance));
+      });
+      const isClear = (candidate) => approaching.every((shot) => (
+        Math.abs(candidate - shot.x) >= requiredClearance
+      ));
+      const clearCandidates = candidates.filter(isClear);
+      const safestX = clearCandidates.length
+        ? clearCandidates.reduce((nearest, candidate) => (
+          Math.abs(candidate - preferredX) < Math.abs(nearest - preferredX) ? candidate : nearest
+        ))
+        : candidates.reduce((best, candidate) => {
+          const clearance = Math.min(...approaching.map((shot) => Math.abs(candidate - shot.x)));
+          const bestClearance = Math.min(...approaching.map((shot) => Math.abs(best - shot.x)));
+          return clearance > bestClearance ? candidate : best;
+        });
       const nearestArrival = Math.min(...approaching.map((shot) => (fighterY - shot.y) / shot.speed));
       return { x: safestX, urgency: Math.max(0, Math.min(1, 1 - nearestArrival / 900)) };
     },
@@ -101,6 +111,50 @@ export function createGalaxianShotController({ random = Math.random } = {}) {
       previousTime = null;
       fired = 0;
     },
+  };
+}
+
+export function createGalaxianFighterMotion({
+  acceleration = .00135,
+  maxSpeed = .34,
+} = {}) {
+  let x = null;
+  let velocity = 0;
+
+  return {
+    update({ targetX, initialX, delta = 1000 / 60, minX, maxX }) {
+      if (x === null) x = initialX;
+      const elapsed = Math.min(50, Math.max(0, delta));
+      const distance = targetX - x;
+      const direction = Math.sign(distance);
+      const stoppingDistance = velocity * velocity / (2 * acceleration);
+      let thrust = 0;
+
+      if (Math.abs(distance) > .5) {
+        const movingAway = velocity !== 0 && Math.sign(velocity) !== direction;
+        const shouldBrake = !movingAway && stoppingDistance >= Math.abs(distance);
+        thrust = (movingAway || shouldBrake) ? -Math.sign(velocity) * acceleration : direction * acceleration;
+      } else if (Math.abs(velocity) > .002) {
+        thrust = -Math.sign(velocity) * acceleration;
+      }
+
+      const previousVelocity = velocity;
+      velocity = Math.max(-maxSpeed, Math.min(maxSpeed, velocity + thrust * elapsed));
+      if (previousVelocity !== 0 && Math.sign(previousVelocity) !== Math.sign(velocity) && Math.abs(distance) <= .5) {
+        velocity = 0;
+      }
+      x += velocity * elapsed;
+      if ((direction > 0 && x > targetX) || (direction < 0 && x < targetX)) {
+        x = targetX;
+        velocity = 0;
+      }
+      if (x < minX || x > maxX) {
+        x = Math.max(minX, Math.min(maxX, x));
+        velocity = 0;
+      }
+      return { x, velocity };
+    },
+    reset() { x = null; velocity = 0; },
   };
 }
 
@@ -120,10 +174,10 @@ export function createGalaxianVisualization({
   let frequencyLanes = null;
   let laneCount = 0;
   let fighterX = null;
-  let fighterPreviousX = null;
-  let fighterPhase = 0;
   let fighterLift = 0;
+  let previousRenderTime = null;
   const shotController = createGalaxianShotController({ random });
+  const fighterMotion = createGalaxianFighterMotion();
   let shooterIndex = 0;
 
   function populate(width, height) {
@@ -227,9 +281,6 @@ export function createGalaxianVisualization({
 
       if (fighter.complete && fighter.naturalWidth !== 0) {
         const size = shipSize * 1.12;
-        fighterPhase += .008 + Math.min(1, bands.mid) * .012;
-        const steering = Math.sin(fighterPhase) * .76 + Math.sin(fighterPhase * .43 + 1.3) * .24;
-        const preferredX = centreX + steering * formationWidth * (.22 + Math.min(1, bands.mid) * .16);
         const fighterY = height - Math.max(88, size * .8) - fighterLift;
         const shooter = ships[shooterIndex % ships.length];
         const shooterEnergy = lanes[Math.min(laneCount - 1, shooter.lane)].energy;
@@ -243,16 +294,22 @@ export function createGalaxianVisualization({
           spawnX: centreX + shooter.x + shooterShake,
           spawnY: centreY + shooter.y + shipSize * .4,
         })) shooterIndex = (shooterIndex + 7) % ships.length;
-        const safe = shotController.safeTarget({ preferredX, fighterY, width, margin: size });
         if (fighterX === null) fighterX = centreX;
-        fighterPreviousX ??= fighterX;
-        fighterX += (safe.x - fighterX) * (.055 + safe.urgency * .2);
-        const velocity = fighterX - fighterPreviousX;
-        fighterPreviousX = fighterX;
+        const safe = shotController.safeTarget({ preferredX: fighterX, fighterY, width, margin: size });
+        const delta = previousRenderTime === null ? 1000 / 60 : time - previousRenderTime;
+        previousRenderTime = time;
+        const motion = fighterMotion.update({
+          targetX: safe.x,
+          initialX: centreX,
+          delta,
+          minX: size,
+          maxX: width - size,
+        });
+        fighterX = motion.x;
         const targetLift = impact * 15 + Math.min(1, bands.low) * 8;
         fighterLift += (targetLift - fighterLift) * .09;
         const y = height - Math.max(88, size * .8) - fighterLift;
-        const rotation = Math.max(-.18, Math.min(.18, velocity * .025));
+        const rotation = Math.max(-.18, Math.min(.18, motion.velocity * .55));
         ctx.globalAlpha = .8;
         ctx.save();
         ctx.translate(fighterX, y);
@@ -260,10 +317,16 @@ export function createGalaxianVisualization({
         ctx.drawImage(fighter, -size / 2, -size * .41, size, size * .82);
         ctx.restore();
 
-        ctx.globalAlpha = .82;
-        ctx.fillStyle = '#ff5d72';
         shotController.shots.forEach((shot) => {
-          ctx.fillRect(shot.x - 1.2, shot.y, 2.4, 9 + bands.high * 5);
+          const length = 13 + bands.high * 5;
+          ctx.globalAlpha = .9;
+          ctx.fillStyle = 'rgba(25, 3, 12, .9)';
+          ctx.fillRect(shot.x - 3.2, shot.y - 2, 6.4, length + 4);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#ff315d';
+          ctx.fillRect(shot.x - 2, shot.y, 4, length);
+          ctx.fillStyle = '#fff4d6';
+          ctx.fillRect(shot.x - .75, shot.y + 2, 1.5, Math.max(5, length - 6));
         });
       }
       ctx.restore();
@@ -281,11 +344,11 @@ export function createGalaxianVisualization({
       frequencyLanes = null;
       laneCount = 0;
       fighterX = null;
-      fighterPreviousX = null;
-      fighterPhase = 0;
       fighterLift = 0;
+      previousRenderTime = null;
       formationSpacingX = 0;
       shotController.reset();
+      fighterMotion.reset();
       shooterIndex = 0;
     },
   };

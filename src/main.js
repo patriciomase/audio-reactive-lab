@@ -12,6 +12,11 @@ import { createVisualizationCatalog, visualizationMetadata } from './visualizati
 import { createGlyphField } from './visualizations/glyph-field.js';
 import { OVERLAP_MORPH_DURATION, overlapMorphDelay } from './visualizations/overlap-morph.js';
 import { createTraceVisualization } from './visualizations/trace.js';
+import {
+  applyEqualizerKey,
+  createEqualizerTypingAnimation,
+  EQUALIZER_DEFAULT_TEXT,
+} from './visualizations/equalizer-typing.js';
 
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
@@ -109,6 +114,7 @@ let equalizerTextLayers = [];
 let equalizerPreviousLow = 0;
 let equalizerLowAverage = .12;
 let equalizerLastBeat = -100;
+const equalizerTypingAnimation = createEqualizerTypingAnimation();
 const glyphCanvas = document.createElement('canvas');
 const glyphCtx = glyphCanvas.getContext('2d');
 const glyphWaveCanvas = document.createElement('canvas');
@@ -625,6 +631,9 @@ function drawEqualizer(w, h, b, audioFrame) {
   const gap = Math.max(2, Math.min(7, usableWidth / barCount * .24));
   const barWidth = Math.max(2, usableWidth / barCount - gap);
   const maxHeight = Math.max(32, h * .42 - 28);
+  const displayText = equalizerText === EQUALIZER_DEFAULT_TEXT
+    ? equalizerTypingAnimation.textAt(audioFrame.time)
+    : equalizerText;
 
   if (equalizerEnergies.length !== barCount) equalizerEnergies = Array(barCount).fill(0);
 
@@ -671,7 +680,7 @@ function drawEqualizer(w, h, b, audioFrame) {
     && frame - equalizerLastBeat > 16;
   if (beat) {
     equalizerTextLayers.push({
-      text: equalizerText,
+      text: displayText,
       x: (Math.random() * 2 - 1) * w * .018,
       y: (Math.random() * 2 - 1) * h * .012,
       vx: (Math.random() * 2 - 1) * .16,
@@ -686,7 +695,7 @@ function drawEqualizer(w, h, b, audioFrame) {
   }
   equalizerPreviousLow = b.low;
 
-  const fontSize = Math.min(h * .13, w / Math.max(7, equalizerText.length * .69)) * equalizerFontSize / 100;
+  const fontSize = Math.min(h * .13, w / Math.max(7, displayText.length * .69)) * equalizerFontSize / 100;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.globalCompositeOperation = 'lighter';
@@ -717,8 +726,8 @@ function drawEqualizer(w, h, b, audioFrame) {
   ctx.lineJoin = 'round';
   ctx.shadowColor = 'rgba(0, 0, 0, .78)';
   ctx.shadowBlur = 12 + b.low * 10;
-  ctx.strokeText(equalizerText, 0, 0);
-  ctx.fillText(equalizerText, 0, 0);
+  ctx.strokeText(displayText, 0, 0);
+  ctx.fillText(displayText, 0, 0);
   ctx.restore();
   ctx.shadowBlur = 0;
   ctx.globalCompositeOperation = 'source-over';
@@ -1004,6 +1013,7 @@ const legacyFactories = {
   }),
   equalizer: () => legacyActivation(drawEqualizer, { reset: () => {
     equalizerEnergies = []; equalizerNoiseGate.reset(); equalizerTextLayers = []; equalizerPreviousLow = 0; equalizerLowAverage = .12; equalizerLastBeat = -100;
+    equalizerTypingAnimation.reset();
   } }),
   glyph: () => {
     const glyph = legacyActivation(drawGlyph, {
@@ -1068,9 +1078,23 @@ document.addEventListener('pointerdown', (event) => {
 });
 document.addEventListener('keydown', (event) => {
   engagementTracker.recordInteraction('keyboard');
-  if (event.key !== 'Escape') return;
-  app.classList.remove('settings-open');
-  settingsToggle.setAttribute('aria-expanded', 'false');
+  if (event.key === 'Escape') {
+    app.classList.remove('settings-open');
+    settingsToggle.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  if (mode !== 'equalizer' || event.target.closest?.('input, select, button, a, textarea')) return;
+  const nextText = applyEqualizerKey(equalizerText, event, {
+    demoActive: equalizerText === EQUALIZER_DEFAULT_TEXT,
+    maxLength: Number(equalizerTextInput.maxLength),
+  });
+  if (nextText === null) return;
+  event.preventDefault();
+  equalizerText = nextText;
+  equalizerTextInput.value = equalizerText;
+  equalizerTextLayers = [];
+  equalizerTypingAnimation.reset();
+  saveSettings();
 });
 sensitivityInput.addEventListener('input', () => {
   sensitivity = Number(sensitivityInput.value);
@@ -1097,6 +1121,7 @@ transitionTimeInput.addEventListener('input', () => {
 });
 equalizerTextInput.addEventListener('input', () => {
   equalizerText = equalizerTextInput.value.slice(0, 24).toUpperCase();
+  equalizerTypingAnimation.reset();
   saveSettings();
 });
 equalizerFontSizeInput.addEventListener('input', () => {

@@ -4,7 +4,7 @@ import { createOrbitVisualization } from '../src/visualizations/orbit.js';
 import { createTerrainVisualization } from '../src/visualizations/terrain.js';
 import { createTunnelVisualization } from '../src/visualizations/tunnel.js';
 import { createPacmanVisualization } from '../src/visualizations/pacman.js';
-import { createGalaxianFrequencyLanes, createGalaxianShotController, createGalaxianVisualization } from '../src/visualizations/galaxian.js';
+import { createGalaxianFighterMotion, createGalaxianFrequencyLanes, createGalaxianShotController, createGalaxianVisualization } from '../src/visualizations/galaxian.js';
 
 function createContext() {
   const counts = { arc: 0, fill: 0, stroke: 0, closePath: 0 };
@@ -163,14 +163,54 @@ test('Galaxian shots stay between one and two per second without burst catch-up'
 
 test('Galaxian fighter selects a path clear of every approaching shot', () => {
   const controller = createGalaxianShotController({ random: () => .5 });
+  const motion = createGalaxianFighterMotion();
   let fighterX = 400;
   for (let time = 0; time <= 12000; time += 1000 / 60) {
     controller.update({ time, width: 800, height: 600, level: 1, spawnX: 400, spawnY: 170 });
-    const safe = controller.safeTarget({ preferredX: 400, fighterY: 510, width: 800, margin: 44 });
-    fighterX += (safe.x - fighterX) * (.055 + safe.urgency * .2);
+    const safe = controller.safeTarget({ preferredX: fighterX, fighterY: 510, width: 800, margin: 44 });
+    fighterX = motion.update({
+      targetX: safe.x,
+      initialX: 400,
+      delta: 1000 / 60,
+      minX: 44,
+      maxX: 756,
+    }).x;
     controller.shots.forEach((shot) => {
       const collides = Math.abs(shot.x - fighterX) < 30 && shot.y > 485 && shot.y < 535;
       assert.equal(collides, false);
     });
   }
+});
+
+test('Galaxian fighter stays still until threatened and accelerates into a short dodge', () => {
+  const motion = createGalaxianFighterMotion();
+  const idle = Array.from({ length: 60 }, () => motion.update({
+    targetX: 400, initialX: 400, delta: 1000 / 60, minX: 44, maxX: 756,
+  }));
+  assert.ok(idle.every(({ x, velocity }) => x === 400 && velocity === 0));
+
+  const dodge = Array.from({ length: 8 }, () => motion.update({
+    targetX: 440, initialX: 400, delta: 1000 / 60, minX: 44, maxX: 756,
+  }));
+  assert.ok(dodge[0].velocity > 0);
+  assert.ok(dodge[1].velocity > dodge[0].velocity);
+  assert.ok(dodge[0].x - 400 < dodge[7].x - dodge[6].x);
+});
+
+test('Galaxian projectiles use a dark outline and bright core distinct from stars', () => {
+  const rectangles = [];
+  const ctx = {
+    ...createContext(),
+    save() {}, restore() {}, translate() {}, rotate() {},
+    fillRect(x, y, width, height) { rectangles.push({ fill: this.fillStyle, x, y, width, height }); },
+    drawImage() {},
+  };
+  const galaxian = createGalaxianVisualization({
+    random: () => .5,
+    createImage: () => ({ complete: true, naturalWidth: 64, src: '' }),
+  });
+  for (let frame = 1; frame <= 100; frame += 1) galaxian.render(renderFrame(ctx, frame));
+
+  assert.ok(rectangles.some(({ fill, width }) => fill === 'rgba(25, 3, 12, .9)' && width === 6.4));
+  assert.ok(rectangles.some(({ fill, width }) => fill === '#fff4d6' && width === 1.5));
 });
