@@ -4,7 +4,7 @@ import { createOrbitVisualization } from '../src/visualizations/orbit.js';
 import { createTerrainVisualization } from '../src/visualizations/terrain.js';
 import { createTunnelVisualization } from '../src/visualizations/tunnel.js';
 import { createPacmanVisualization } from '../src/visualizations/pacman.js';
-import { createGalaxianFrequencyLanes, createGalaxianVisualization } from '../src/visualizations/galaxian.js';
+import { createGalaxianFrequencyLanes, createGalaxianShotController, createGalaxianVisualization } from '../src/visualizations/galaxian.js';
 
 function createContext() {
   const counts = { arc: 0, fill: 0, stroke: 0, closePath: 0 };
@@ -146,5 +146,31 @@ test('Galaxian enemy equalizer bars never overlap', () => {
         assert.ok(overlapX <= 0 || overlapY <= 0, `enemy rectangles overlap at frame ${frame} by ${overlapX.toFixed(1)}×${overlapY.toFixed(1)}`);
       }
     }
+  }
+});
+
+test('Galaxian shots stay between one and two per second without burst catch-up', () => {
+  const controller = createGalaxianShotController({ random: () => .5 });
+  for (let time = 0; time <= 10000; time += 100) {
+    controller.update({ time, width: 800, height: 600, level: .5, spawnX: 400, spawnY: 200 });
+  }
+  assert.ok(controller.fired >= 10);
+  assert.ok(controller.fired <= 20);
+  const beforePause = controller.fired;
+  controller.update({ time: 30000, width: 800, height: 600, level: 1, spawnX: 400, spawnY: 200 });
+  assert.equal(controller.fired, beforePause + 1);
+});
+
+test('Galaxian fighter selects a path clear of every approaching shot', () => {
+  const controller = createGalaxianShotController({ random: () => .5 });
+  let fighterX = 400;
+  for (let time = 0; time <= 12000; time += 1000 / 60) {
+    controller.update({ time, width: 800, height: 600, level: 1, spawnX: 400, spawnY: 170 });
+    const safe = controller.safeTarget({ preferredX: 400, fighterY: 510, width: 800, margin: 44 });
+    fighterX += (safe.x - fighterX) * (.055 + safe.urgency * .2);
+    controller.shots.forEach((shot) => {
+      const collides = Math.abs(shot.x - fighterX) < 30 && shot.y > 485 && shot.y < 535;
+      assert.equal(collides, false);
+    });
   }
 });
